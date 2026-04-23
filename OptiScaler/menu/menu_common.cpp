@@ -4517,8 +4517,8 @@ bool MenuCommon::RenderMenu()
                     if (bool forceLFX = config->FN_ForceLatencyFlex.value_or_default();
                         ImGui::Checkbox("Force LatencyFlex", &forceLFX))
                         config->FN_ForceLatencyFlex = forceLFX;
-                    ShowHelpMarker(
-                        "AntiLag 2 / XeLL is used when available, this setting lets you force LatencyFlex instead");
+                    ShowHelpMarker("By default, AntiLag 2/XeLL is used when available.\n"
+                                   "This setting lets you force LatencyFlex instead");
 
                     // clang-format off
                     static const std::vector<MenuOption<uint32_t>> lfx_modes = {
@@ -4527,7 +4527,8 @@ bool MenuCommon::RenderMenu()
                         { 1, "Aggressive",
                             "Improves latency, but in some cases will lower FPS more than expected" },
                         { 2, "Reflex ID",
-                            "Best when can be used, some games are not compatible (i.e. cyberpunk) and will fallback to Aggressive" }
+                            "Best when can be used, some games are not compatible (e.g. Cyberpunk)\n"
+                            "and will fallback to Aggressive" }
                     };
 
                     PopulateCombo("LatencyFlex mode", config->FN_LatencyFlexMode, lfx_modes);
@@ -4591,11 +4592,12 @@ bool MenuCommon::RenderMenu()
                             ImGui::Checkbox("Enable RCAS/DA", &rcas))
                             config->RcasEnabled = rcas;
 
-                        ShowHelpMarker(
-                            "Enable OptiScaler's sharpening filter\n"
-                            "By default uses a sharpening value provided by the game\n"
-                            "Select 'Override' under 'Sharpness' and adjust the slider to change it\n\n"
-                            "Some upscalers have their own sharpness filter,\n so this option is not always needed");
+                        ShowHelpMarker("Enable OptiScaler's sharpening filter\n"
+                                       "By default uses a sharpening value provided by the game\n"
+                                       "Select 'Override' under 'Sharpness' and adjust the slider\n"
+                                       "to change it\n\n"
+                                       "Some upscalers have their own sharpness filter, so this\n"
+                                       "option is not always needed");
 
                         ImGui::BeginDisabled(!config->RcasEnabled.value_or(rcasEnabled));
 
@@ -4606,7 +4608,8 @@ bool MenuCommon::RenderMenu()
                             Config::Instance()->UseDepthAwareSharpen = !useRcas;
 
                         ShowHelpMarker("Use AMD's RCAS\n"
-                                       "Modified to add Contrast parameter and MAS support");
+                                       "Modified to add Contrast parameter\n"
+                                       "and MAS support");
 
                         ImGui::SameLine(0.0f, 6.0f);
 
@@ -4614,7 +4617,10 @@ bool MenuCommon::RenderMenu()
                             Config::Instance()->UseDepthAwareSharpen = useDA;
 
                         ShowHelpMarker("Use Depth Aware Sharpening\n"
-                                       "Smarter sharpening with less artifacts, but also more heavy");
+                                       "Smarter sharpening with less artifacts,\n"
+                                       "but also heavier\n\n"
+                                       "The farther away is the object, the more\n"
+                                       "sharpening is applied");
 
                         ImGui::Spacing();
 
@@ -4634,8 +4640,9 @@ bool MenuCommon::RenderMenu()
                                     config->DADepthIsLinear.reset();
                             }
 
-                            ShowHelpMarker("Most games use non-linear depth but\nDLSS-D might need this option to be "
-                                           "enabled.\nCould be verify via Debug view");
+                            ShowHelpMarker("Most games use non-linear depth, but\n"
+                                           "DLSS-D might need this option to be enabled.\n"
+                                           "Could be verified via Debug view");
 
                             ImGui::SameLine(0.0f, 6.0f);
 
@@ -4643,7 +4650,8 @@ bool MenuCommon::RenderMenu()
                                 ImGui::Checkbox("DA Debug", &overrideMSDebug))
                                 config->MotionSharpnessDebug = overrideMSDebug;
 
-                            ShowHelpMarker("Enable DAS debug view");
+                            ShowHelpMarker("Enable DAS debug view\n\n"
+                                           "Blue tint for detected edges");
 
                             if (auto ch = ScopedCollapsingHeader("Advanced DA Parameters"); ch.IsHeaderOpen())
                             {
@@ -4810,9 +4818,8 @@ bool MenuCommon::RenderMenu()
                         if (upOverride)
                             config->QualityRatioOverrideEnabled = false;
                     }
-                    ShowHelpMarker("Lets you override every upscaler preset\n"
-                                   "with a value set below\n\n"
-                                   "1.5x on a 1080p screen means internal resolution of 720p\n"
+                    ShowHelpMarker("Overrides every upscaler preset with the set value\n\n"
+                                   "1.5x on a 1080p screen means an internal res of 720p\n"
                                    "1080 / 1.5 = 720");
 
                     if (bool qOverride = config->QualityRatioOverrideEnabled.value_or_default();
