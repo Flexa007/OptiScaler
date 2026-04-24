@@ -1677,6 +1677,14 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         exeModule = GetModuleHandle(nullptr);
         processId = GetCurrentProcessId();
 
+        // Main Opti DLL path
+        if (!Config::Instance()->MainDllPath.has_value())
+            Config::Instance()->MainDllPath.set_volatile_value(Util::ExePath().parent_path() / L".");
+
+        if (!Config::Instance()->PluginPath.has_value())
+            Config::Instance()->PluginPath.set_volatile_value(
+                std::filesystem::path(Config::Instance()->MainDllPath.value()) / L"plugins");
+
         CheckForExcludedProcess();
 
         if (_passThruMode)
@@ -1688,14 +1696,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
             CheckWorkingMode();
             break;
         }
-
-        // Main Opti DLL path
-        if (!Config::Instance()->MainDllPath.has_value())
-            Config::Instance()->MainDllPath.set_volatile_value(Util::ExePath().parent_path() / L".");
-
-        if (!Config::Instance()->PluginPath.has_value())
-            Config::Instance()->PluginPath.set_volatile_value(
-                std::filesystem::path(Config::Instance()->MainDllPath.value()) / L"plugins");
 
 #ifdef _DEBUG // VER_PRE_RELEASE
         // Enable file logging for pre builds
