@@ -502,10 +502,14 @@ void RCAS_Vk::FillMotionConstants(InternalConstants& OutConstants, const RcasCon
     OutConstants.Threshold = Config::Instance()->MotionThreshold.value_or_default();
     OutConstants.ScaleLimit = Config::Instance()->MotionScaleLimit.value_or_default();
 
-    if (feature->TargetWidth() == 0)
-        OutConstants.MotionTextureScale = 1.0f;
-    else
+    if (feature->LowResMV())
+    {
         OutConstants.MotionTextureScale = (float) feature->RenderWidth() / (float) feature->TargetWidth();
+    }
+    else
+    {
+        OutConstants.MotionTextureScale = 1.0f;
+    }
 }
 
 void RCAS_Vk::FillMotionConstants(InternalConstantsDA& OutConstants, const RcasConstants& InConstants)
@@ -535,11 +539,7 @@ void RCAS_Vk::FillMotionConstants(InternalConstantsDA& OutConstants, const RcasC
     OutConstants.DepthLinearA = InConstants.CameraNear * InConstants.CameraFar;
     OutConstants.DepthLinearB = InConstants.CameraFar;
     OutConstants.DepthLinearC = InConstants.CameraFar - InConstants.CameraNear;
-
-    if (feature->DisplayWidth() == 0)
-        OutConstants.DepthTextureScale = 1.0f;
-    else
-        OutConstants.DepthTextureScale = (float) feature->RenderWidth() / (float) feature->DisplayWidth();
+    OutConstants.DepthTextureScale = (float) feature->RenderWidth() / (float) feature->DisplayWidth();
 
     OutConstants.ClampOutput = Config::Instance()->DAClampOutput.value_or(feature->IsHdr()) ? 0 : 1;
 
@@ -550,17 +550,14 @@ void RCAS_Vk::FillMotionConstants(InternalConstantsDA& OutConstants, const RcasC
     }
     else
     {
-        OutConstants.MotionWidth = feature->DisplayWidth();
-        OutConstants.MotionHeight = feature->DisplayHeight();
+        OutConstants.MotionWidth = feature->TargetWidth();
+        OutConstants.MotionHeight = feature->TargetHeight();
     }
 
     OutConstants.DepthWidth = feature->RenderWidth();
     OutConstants.DepthHeight = feature->RenderHeight();
 
-    if (feature->TargetWidth() == 0)
-        OutConstants.MotionTextureScale = 1.0f;
-    else
-        OutConstants.MotionTextureScale = (float) feature->RenderWidth() / (float) feature->TargetWidth();
+    OutConstants.MotionTextureScale = (float) OutConstants.MotionWidth / (float) feature->TargetWidth();
 }
 
 bool RCAS_Vk::DispatchRCAS(VkDevice InDevice, VkCommandBuffer InCmdList, RcasConstants InConstants,

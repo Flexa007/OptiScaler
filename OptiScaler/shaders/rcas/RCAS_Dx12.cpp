@@ -59,7 +59,14 @@ void RCAS_Dx12::FillMotionConstants(InternalConstants& OutConstants, const RcasC
     OutConstants.Threshold = Config::Instance()->MotionThreshold.value_or_default();
     OutConstants.ScaleLimit = Config::Instance()->MotionScaleLimit.value_or_default();
 
+    if (feature->LowResMV())
+    {
     OutConstants.MotionTextureScale = (float) feature->RenderWidth() / (float) feature->TargetWidth();
+}
+    else
+    {
+        OutConstants.MotionTextureScale = 1.0f;
+    }
 }
 
 void RCAS_Dx12::FillMotionConstants(InternalConstantsDA& OutConstants, const RcasConstants& InConstants)
@@ -97,11 +104,13 @@ void RCAS_Dx12::FillMotionConstants(InternalConstantsDA& OutConstants, const Rca
     {
         OutConstants.MotionWidth = feature->RenderWidth();
         OutConstants.MotionHeight = feature->RenderHeight();
+        OutConstants.MotionTextureScale = (float) OutConstants.MotionWidth / (float) feature->TargetWidth();
     }
     else
     {
         OutConstants.MotionWidth = feature->TargetWidth();
         OutConstants.MotionHeight = feature->TargetHeight();
+        OutConstants.MotionTextureScale = 1.0f;
     }
 
     OutConstants.DepthWidth = feature->RenderWidth();
@@ -261,8 +270,8 @@ bool RCAS_Dx12::DispatchDepthAdaptive(ID3D12Device* InDevice, ID3D12GraphicsComm
     InCmdList->SetPipelineState(_pipelineStateDA);
     InCmdList->SetComputeRootDescriptorTable(0, currentHeap.GetTableGPUStart());
 
-    UINT dispatchWidth = static_cast<UINT>((inDesc.Width + InNumThreadsX - 1) / InNumThreadsX);
-    UINT dispatchHeight = (inDesc.Height + InNumThreadsY - 1) / InNumThreadsY;
+    UINT dispatchWidth = static_cast<UINT>((constants.DisplayWidth + InNumThreadsX - 1) / InNumThreadsX);
+    UINT dispatchHeight = (constants.DisplayHeight + InNumThreadsY - 1) / InNumThreadsY;
     InCmdList->Dispatch(dispatchWidth, dispatchHeight, 1);
 
     return true;
