@@ -4699,8 +4699,8 @@ bool MenuCommon::RenderMenu()
                                 }
                                 else
                                 {
-                                    float depthBias = config->DADepthBias.value_or(0.01f);
-                                    if (ImGui::SliderFloat("Depth Bias", &depthBias, 0.005f, 0.03f, "%.3f"))
+                                    float depthBias = config->DADepthBias.value_or(0.001f);
+                                    if (ImGui::SliderFloat("Depth Bias", &depthBias, 0.0001f, 0.003f, "%.4f"))
                                         config->DADepthBias = depthBias;
 
                                     ShowHelpMarker(
@@ -4710,8 +4710,8 @@ bool MenuCommon::RenderMenu()
                                         "Lower values preserve fine detail but can cause unstable or noisy edge "
                                         "detection.");
 
-                                    float depthScale = config->DADepthScale.value_or(4.0f);
-                                    if (ImGui::SliderFloat("Depth Scale", &depthScale, 2.0f, 10.0f, "%.1f"))
+                                    float depthScale = config->DADepthScale.value_or(35.0f);
+                                    if (ImGui::SliderFloat("Depth Scale", &depthScale, 25.0f, 400.0f, "%.1f"))
                                         config->DADepthScale = depthScale;
 
                                     ShowHelpMarker(

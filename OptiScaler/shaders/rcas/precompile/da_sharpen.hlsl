@@ -133,11 +133,28 @@ float LinearizeDepth(float rawDepth)
 {
     float z = rawDepth;
 
-    if (DepthIsReversed > 0)
-        z = 1.0 - z;
-
     if (DepthIsLinear > 0)
+    {
+        if (DepthIsReversed > 0)
+            z = 1.0 - z;
+
         return z;
+    }
+
+    if (DepthIsReversed > 0)
+    {
+        // Non-reversed formula:
+        // linear = near * far / (far - z * (far - near))
+        //
+        // Reversed-Z direct version:
+        // zNormal = 1 - zReversed
+        // denominator = near + zReversed * (far - near)
+        //
+        // near = DepthLinearB - DepthLinearC
+        float nearPlane = DepthLinearB - DepthLinearC;
+
+        return DepthLinearA / max(nearPlane + z * DepthLinearC, 1e-6);
+    }
 
     return DepthLinearA / max(DepthLinearB - z * DepthLinearC, 1e-6);
 }
@@ -149,24 +166,50 @@ float SafeLoadDepthLinearFromOutputPixel(int2 pixelCoord)
     return LinearizeDepth(SafeLoadRawDepthAtCoord(depthCoord));
 }
 
-// Cheap bounded S-curve approximation.
-float3 FastSCurve(float3 x)
+float DistanceSharpnessBoost(float linearDepth)
 {
-    return x / (1.0 + abs(x));
+    // Works best if linearDepth is view-space-ish positive distance.
+    // log2 keeps the boost gradual and avoids overboosting very far depth.
+    float d = max(linearDepth, 1e-4);
+
+    float boost = saturate((log2(d) - 4.0) * 0.15);
+
+    // 1.0 near, up to 1.35 far
+    return lerp(1.0, 1.35, boost);
 }
 
-float3 RemapFunction(float3 x, float3 center, float amount)
+float2 EstimateDepthGradient(int2 p, float centerDepth)
 {
-    float3 d = (x - center) * 4.2;
-    float3 curve = amount * 0.35 * FastSCurve(d);
-    return x + curve;
+    float r = SafeLoadDepthLinearFromOutputPixel(p + int2(1, 0));
+    float l = SafeLoadDepthLinearFromOutputPixel(p + int2(-1, 0));
+    float u = SafeLoadDepthLinearFromOutputPixel(p + int2(0, 1));
+    float d = SafeLoadDepthLinearFromOutputPixel(p + int2(0, -1));
+
+    float gxF = r - centerDepth;
+    float gxB = centerDepth - l;
+    float gyF = u - centerDepth;
+    float gyB = centerDepth - d;
+
+    // Prefer the smoother local derivative.
+    float gx = abs(gxF) < abs(gxB) ? gxF : gxB;
+    float gy = abs(gyF) < abs(gyB) ? gyF : gyB;
+
+    float maxGrad = abs(centerDepth) * 0.05;
+    return clamp(float2(gx, gy), -maxGrad, maxGrad);
 }
 
-float DepthWeight(float centerDepth, float sampleDepth)
+float DepthWeightGrad(float centerDepth, float sampleDepth, float2 gradient, int2 offset)
 {
-    float dz = abs(sampleDepth - centerDepth);
-    dz = max(dz - DepthBias, 0.0);
-    return saturate(1.0 - dz * DepthScale);
+    float predicted = centerDepth + dot(float2(offset), gradient);
+
+    float residual = abs(sampleDepth - predicted);
+
+    // Relative error is much more stable across distance.
+    residual /= max(abs(centerDepth), 1e-4);
+
+    residual = max(residual - DepthBias, 0.0);
+
+    return saturate(1.0 - residual * DepthScale);
 }
 
 float ComputeAdaptiveSharpness(int2 pixelCoord)
@@ -209,21 +252,82 @@ float3 ApplyDebugTint(
     float3 color,
     float baseSharpness,
     float adaptiveSharpness,
+    float edgeSharpness,
     float finalSharpness,
+    float distanceBoost,
     int debugMode)
 {
     float motionBoost = max(adaptiveSharpness - baseSharpness, 0.0);
     float motionReduce = max(baseSharpness - adaptiveSharpness, 0.0);
-    float depthReduce = max(adaptiveSharpness - finalSharpness, 0.0);
+
+    // Blue should mean edge-based sharpen reduction only.
+    float edgeReduce = max(adaptiveSharpness - edgeSharpness, 0.0);
+
+    float distanceIncrease = max(distanceBoost - 1.0, 0.0);
 
     if (debugMode > 0)
     {
         color.r *= 1.0 + 12.0 * motionBoost;
+        color.r += 0.35 * distanceIncrease;
+
         color.g *= 1.0 + 12.0 * motionReduce;
-        color.b *= 1.0 + 12.0 * depthReduce;
+        color.b *= 1.0 + 12.0 * edgeReduce;
     }
 
     return color;
+}
+
+float ComputeEdgeFactor(int2 p, float3 center, float centerDepth, float2 depthGrad)
+{
+    float cLuma = dot(center, float3(0.2126, 0.7152, 0.0722));
+    float lumaSum = 0.0;
+
+    float depthEdge = 1.0;
+
+    [unroll]
+    for (int i = 0; i < 4; ++i)
+    {
+        int2 o = kCrossOffsets[i];
+
+        float3 tap = SafeLoadColor(p + o);
+        float tLuma = dot(tap, float3(0.2126, 0.7152, 0.0722));
+        lumaSum += abs(tLuma - cLuma);
+
+        float tapDepth = SafeLoadDepthLinearFromOutputPixel(p + o);
+        float w = DepthWeightGrad(centerDepth, tapDepth, depthGrad, o);
+
+        depthEdge = min(depthEdge, w);
+    }
+
+    // Average visible brightness difference around this pixel.
+    float lumaAvg = lumaSum * 0.25;
+
+    // 0 = luma does not confirm the depth edge
+    // 1 = luma strongly confirms the depth edge
+    float lumaConfirm = saturate((lumaAvg - 0.02) * 18.0);
+
+    // Luma is confirmation, not an edge source.
+    // Even without luma confirmation, keep some depth protection.
+    float depthTrust = lerp(0.15, 1.0, lumaConfirm);
+
+    return lerp(1.0, depthEdge, depthTrust);
+}
+
+float ComputeLocalLumaRange(int2 p, float centerLuma)
+{
+    float lMin = centerLuma;
+    float lMax = centerLuma;
+
+    [unroll]
+    for (int i = 0; i < 4; ++i)
+    {
+        float3 tap = SafeLoadColor(p + kCrossOffsets[i]);
+        float l = dot(tap, float3(0.2126, 0.7152, 0.0722));
+        lMin = min(lMin, l);
+        lMax = max(lMax, l);
+    }
+
+    return lMax - lMin;
 }
 
 // -----------------------------------------------------------------------------
@@ -247,7 +351,7 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
         float3 outColor = c;
 
         if (Debug > 0)
-            outColor = ApplyDebugTint(outColor, Sharpness, adaptiveSharpness, adaptiveSharpness, Debug);
+            outColor = ApplyDebugTint(outColor, Sharpness, adaptiveSharpness, adaptiveSharpness, adaptiveSharpness, 1.0, Debug);
 
         if (ClampOutput > 0)
             outColor = saturate(outColor);
@@ -257,57 +361,75 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
     }
 
     float centerDepth = SafeLoadDepthLinearFromOutputPixel(p);
+    float2 depthGrad = EstimateDepthGradient(p, centerDepth);
 
+    // Pre-load cross depths
     float crossDepths[4];
-    float crossDepthWeightSum = 0.0;
-
     [unroll]
     for (int i = 0; i < 4; ++i)
-    {
         crossDepths[i] = SafeLoadDepthLinearFromOutputPixel(p + kCrossOffsets[i]);
-        crossDepthWeightSum += DepthWeight(centerDepth, crossDepths[i]);
-    }
 
-    float depthEdgeFactor = saturate(crossDepthWeightSum * 0.25);
-    float finalSharpness = adaptiveSharpness * lerp(0.35, 1.0, depthEdgeFactor);
+    // Combined luma + depth edge factor
+    float edgeFactor = ComputeEdgeFactor(p, c, centerDepth, depthGrad);
+    float edgeSharpness = adaptiveSharpness * lerp(0.2, 1.0, edgeFactor);
 
-    float4 G1 = float4(c, 1.0) * 4.0;
-    float4 L0 = float4(c, 1.0) * 4.0;
+    float distanceBoost = DistanceSharpnessBoost(centerDepth);
+    float motionStability = saturate(adaptiveSharpness / max(Sharpness, 1e-4));
+    distanceBoost = lerp(1.0, distanceBoost, motionStability);
 
-    [unroll]
-    for (int j = 0; j < 4; ++j)
-    {
-        int2 q = p + kCrossOffsets[j];
+    float boostedSharpness = edgeSharpness * distanceBoost;
 
-        float3 tap = SafeLoadColor(q);
-        float depthW = DepthWeight(centerDepth, crossDepths[j]);
-        float w = 1.5 * depthW;
+    float lumaRange = ComputeLocalLumaRange(p, dot(c, float3(0.2126, 0.7152, 0.0722)));
 
-        G1 += float4(tap, 1.0) * w;
-        L0 += float4(RemapFunction(tap, c, finalSharpness), 1.0) * w;
-    }
+    float unstable = saturate((lumaRange - 0.12) * 4.0);
+    unstable *= unstable;
 
-    [unroll]
-    for (int k = 0; k < 4; ++k)
-    {
-        int2 q = p + kDiagOffsets[k];
+    boostedSharpness *= lerp(1.0, 0.75, unstable);
+    float finalSharpness = min(boostedSharpness, 2.0);
 
-        float3 tap = SafeLoadColor(q);
-        float tapDepth = SafeLoadDepthLinearFromOutputPixel(q);
-        float w = DepthWeight(centerDepth, tapDepth);
+    float3 e = c;
 
-        G1 += float4(tap, 1.0) * w;
-        L0 += float4(RemapFunction(tap, c, finalSharpness), 1.0) * w;
-    }
+    // RCAS 4-neighbor pattern
+    float3 b = SafeLoadColor(p + int2(0, -1));
+    float3 d = SafeLoadColor(p + int2(-1, 0));
+    float3 f = SafeLoadColor(p + int2(1, 0));
+    float3 h = SafeLoadColor(p + int2(0, 1));
 
-    // w starts at 4.0 and only accumulates non-negative weights.
-    G1.rgb /= G1.w;
-    L0.rgb /= L0.w;
+    // Depth weights for cross taps.
+    // crossDepths order matches kCrossOffsets:
+    // 0 = up, 1 = left, 2 = right, 3 = down
+    float wb = DepthWeightGrad(centerDepth, crossDepths[0], depthGrad, int2(0, -1));
+    float wd = DepthWeightGrad(centerDepth, crossDepths[1], depthGrad, int2(-1, 0));
+    float wf = DepthWeightGrad(centerDepth, crossDepths[2], depthGrad, int2(1, 0));
+    float wh = DepthWeightGrad(centerDepth, crossDepths[3], depthGrad, int2(0, 1));
 
-    float3 output = (c - L0.rgb) + G1.rgb;
+    // Prevent RCAS from pulling color across depth discontinuities.
+    // Unsafe neighbors are blended back toward center.
+    b = lerp(e, b, wb);
+    d = lerp(e, d, wd);
+    f = lerp(e, f, wf);
+    h = lerp(e, h, wh);
+
+    // RCAS min/max ring
+    float3 minRGB = min(min(b, d), min(f, h));
+    float3 maxRGB = max(max(b, d), max(f, h));
+
+    float2 peakC = float2(1.0, -4.0);
+
+    // limiter
+    float3 hitMin = minRGB / max(4.0 * maxRGB, 1e-5);
+    float3 hitMax = (peakC.xxx - maxRGB) / max(4.0 * minRGB + peakC.yyy, -1e-5);
+
+    float3 lobeRGB = max(-hitMin, hitMax);
+
+    // RCAS is happier with roughly 0..1 range.
+    float rcasSharpness = saturate(finalSharpness * 0.75);
+    float lobe = max(-0.1875, min(max(lobeRGB.r, max(lobeRGB.g, lobeRGB.b)), 0.0)) * rcasSharpness;
+    float rcpL = rcp(4.0 * lobe + 1.0);
+    float3 output = ((b + d + f + h) * lobe + e) * rcpL;
 
     if (Debug > 0)
-        output = ApplyDebugTint(output, Sharpness, adaptiveSharpness, finalSharpness, Debug);
+        output = ApplyDebugTint(output, Sharpness, adaptiveSharpness, edgeSharpness, finalSharpness, distanceBoost, Debug);
 
     if (ClampOutput > 0)
         output = saturate(output);
