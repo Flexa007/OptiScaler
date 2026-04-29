@@ -1347,12 +1347,19 @@ void MenuCommon::PopulateCombo(const std::string& name, TStorage& currentValue,
 
 static ImVec4 toneMapColor(const ImVec4& color)
 {
-    // Apply tone mapping (e.g., Reinhard tone mapping)
-    float luminance = 0.2126f * color.x + 0.7152f * color.y + 0.0722f * color.z;
-    float mappedLuminance = luminance / (1.0f + luminance);
-    float scale = mappedLuminance / luminance;
+    if (State::Instance().isHdrActive ||
+        (!Config::Instance()->OverlayMenu.value_or_default() && State::Instance().currentFeature != nullptr &&
+         State::Instance().currentFeature->IsHdr()))
+    {
+        // Apply tone mapping (e.g., Reinhard tone mapping)
+        float luminance = 0.2126f * color.x + 0.7152f * color.y + 0.0722f * color.z;
+        float mappedLuminance = luminance / (1.0f + luminance);
+        float scale = mappedLuminance / luminance;
 
-    return ImVec4(color.x * scale, color.y * scale, color.z * scale, color.w);
+        return ImVec4(color.x * scale, color.y * scale, color.z * scale, color.w);
+    }
+
+    return color;
 }
 
 static void MenuHdrCheck(ImGuiIO io)
