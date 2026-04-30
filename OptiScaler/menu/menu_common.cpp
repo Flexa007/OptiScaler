@@ -2577,7 +2577,8 @@ bool MenuCommon::RenderMenu()
 
                     std::string joinedUpscalers(joined.begin(), joined.end());
 
-                    ImGui::Text("Please select %s as upscaler\nfrom game options and load into the game\nto enable "
+                    ImGui::Text("Please select %s as upscaler\nfrom game options and load into a save (if not "
+                                "showing)\nto enable "
                                 "upscaler settings.\n",
                                 joinedUpscalers.c_str());
 
