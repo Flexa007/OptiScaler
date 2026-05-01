@@ -571,6 +571,12 @@ RCAS_Dx12::~RCAS_Dx12()
         _pipelineStateDA = nullptr;
     }
 
+    if (_pipelineStateLCDA != nullptr)
+    {
+        _pipelineStateLCDA->Release();
+        _pipelineStateLCDA = nullptr;
+    }
+
     for (int i = 0; i < RCAS_NUM_OF_HEAPS; i++)
     {
         _frameHeaps[i].ReleaseHeaps();

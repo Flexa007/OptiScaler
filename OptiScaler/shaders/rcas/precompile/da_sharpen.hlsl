@@ -197,7 +197,7 @@ float DepthWeightGrad(float centerDepth, float sampleDepth, float2 gradient, int
     residual /= max(abs(centerDepth), 1e-4);
 
     // More dead-zone before rejection starts.
-    residual = max(residual - DepthBias, 0.0);
+    residual = max(residual - DepthBias - 1e-5, 0.0);
 
     // Softer falloff.
     float w = saturate(1.0 - residual * DepthScale);
@@ -359,7 +359,7 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 
     // Combined luma + depth edge factor
     float edgeFactor = ComputeEdgeFactor(p, c, centerDepth, depthGrad);
-    float edgeSharpness = adaptiveSharpness * lerp(0.2, 1.0, edgeFactor);
+    float edgeSharpness = adaptiveSharpness * lerp(0.65, 1.0, edgeFactor);
 
     float distanceBoost = DistanceSharpnessBoost(centerDepth);
     float motionStability = saturate(adaptiveSharpness / max(Sharpness, 1e-4));

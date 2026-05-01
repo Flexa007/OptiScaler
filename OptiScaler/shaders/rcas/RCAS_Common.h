@@ -215,7 +215,7 @@ float DepthWeightGrad(float centerDepth, float sampleDepth, float2 gradient, int
     residual /= max(abs(centerDepth), 1e-4);
 
     // More dead-zone before rejection starts.
-    residual = max(residual - DepthBias, 0.0);
+    residual = max(residual - DepthBias - 1e-5, 0.0);
 
     // Softer falloff.
     float w = saturate(1.0 - residual * DepthScale);
@@ -377,7 +377,7 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 
     // Combined luma + depth edge factor
     float edgeFactor = ComputeEdgeFactor(p, c, centerDepth, depthGrad);
-    float edgeSharpness = adaptiveSharpness * lerp(0.2, 1.0, edgeFactor);
+    float edgeSharpness = adaptiveSharpness * lerp(0.65, 1.0, edgeFactor);
 
     float distanceBoost = DistanceSharpnessBoost(centerDepth);
     float motionStability = saturate(adaptiveSharpness / max(Sharpness, 1e-4));
@@ -622,8 +622,14 @@ float3 FastSCurve(float3 x)
 
 float3 RemapLocalContrast(float3 x, float3 center, float amount)
 {
-    float3 d = (x - center) * 4.2;
-    float3 curve = amount * 0.35 * FastSCurve(d);
+    float3 s = 6.0.xxx;
+
+    float3 d = 0.7 * s * (x - center);
+    d = clamp(d, -1.25.xxx, 1.25.xxx);
+
+    float LCInternalGain = 1.5;
+    float3 curve = amount * LCInternalGain * 0.7 * (sin(d * 3.14159265) + tanh(d * 4.0)) / s;
+
     return x + curve;
 }
 
@@ -654,8 +660,8 @@ float DepthWeightGradSoft(float centerDepth, float sampleDepth, float2 gradient,
     float residual = abs(sampleDepth - predicted);
 
     residual /= max(abs(centerDepth), 1e-4);
-    residual = max(residual - DepthBias, 0.0);
-
+    residual = max(residual - DepthBias - 1e-5, 0.0);
+    
     float w = saturate(1.0 - residual * DepthScale);
 
     return lerp(0.65, 1.0, w);
@@ -670,12 +676,11 @@ float DepthWeightTapGrad(float centerDepth, float sampleDepth, float2 gradient, 
     float residual = abs(sampleDepth - predicted);
 
     residual /= max(abs(centerDepth), 1e-4);
-    residual = max(residual - DepthBias, 0.0);
+    residual = max(residual - DepthBias - 1e-5, 0.0);
 
     float w = saturate(1.0 - residual * DepthScale);
 
-    // Mildly harden rejection without making slopes too fragile.
-    return w * w;
+    return lerp(0.35, 1.0, w);
 }
 
 float DistanceSharpnessBoost(float linearDepth)
@@ -795,9 +800,7 @@ float LumaSimilarityWeight(float centerLuma, float tapLuma)
 {
     float dl = abs(tapLuma - centerLuma);
 
-    // Suppress taps across very strong luma jumps.
-    // Useful for emissive/glow/bloom edges where depth may not represent the visible edge.
-    return saturate(1.0 - max(dl - 0.08, 0.0) * 5.0);
+    return saturate(1.0 - max(dl - 0.12, 0.0) * 3.0);
 }
 
 // -----------------------------------------------------------------------------
@@ -846,9 +849,9 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
     for (int i = 0; i < 4; ++i)
         diagDepths[i] = SafeLoadDepthLinearFromOutputPixel(p + kDiagOffsets[i]);
 
-    // Only use the gradient-aware, luma-confirmed edge factor for global reduction.
+    // Global adaptive reduction
     float edgeFactor = ComputeEdgeFactor(p, c, centerDepth, depthGrad);
-    float edgeSharpness = adaptiveSharpness * lerp(0.2, 1.0, edgeFactor);
+    float edgeSharpness = adaptiveSharpness * lerp(0.65, 1.0, edgeFactor);
 
     float distanceBoost = DistanceSharpnessBoost(centerDepth);
     float motionStability = saturate(adaptiveSharpness / max(Sharpness, 1e-4));
@@ -862,15 +865,33 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 
     boostedSharpness *= lerp(1.0, 0.9, unstable);
 
-    // Local contrast curve is safest in 0..1 range.
-    float finalSharpness = saturate(boostedSharpness);
+    float finalSharpness = clamp(boostedSharpness, 0.0, 1.5);
 
     // -------------------------------------------------------------------------
     // Local contrast / one-level local Laplacian core
     // -------------------------------------------------------------------------
 
-    float4 G1 = float4(c, 1.0) * 4.0;
-    float4 L0 = float4(c, 1.0) * 4.0;
+    float localScale = max(max(c.r, max(c.g, c.b)), 1e-4);
+
+    [unroll]
+    for (int i = 0; i < 4; ++i)
+    {
+        float3 tap = SafeLoadColor(p + kCrossOffsets[i]);
+        localScale = max(localScale, max(tap.r, max(tap.g, tap.b)));
+    }
+
+    [unroll]
+    for (int i = 0; i < 4; ++i)
+    {
+        float3 tap = SafeLoadColor(p + kDiagOffsets[i]);
+        localScale = max(localScale, max(tap.r, max(tap.g, tap.b)));
+    }
+
+    localScale = max(localScale, 0.06);
+
+    float3 cn = c / localScale;
+    float4 G1 = float4(cn, 1.0) * 4.0;
+    float4 L0 = float4(cn, 1.0) * 4.0;
 
     [unroll]
     for (int j = 0; j < 4; ++j)
@@ -879,16 +900,13 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
         int2 q = p + o;
 
         float3 tap = SafeLoadColor(q);
-        float tapLuma = Luma(tap);
+        float3 tapN = tap / localScale;
 
         float depthW = DepthWeightTapGrad(centerDepth, crossDepths[j], depthGrad, o);
-        float lumaW = LumaSimilarityWeight(centerLuma, tapLuma);
+        float w = 2.0 * depthW;
 
-        // Slightly weaker than Pascal-style 2x cross weighting.
-        float w = 1.5 * depthW * lumaW;
-
-        G1 += float4(tap, 1.0) * w;
-        L0 += float4(RemapLocalContrast(tap, c, finalSharpness), 1.0) * w;
+        G1 += float4(tapN, 1.0) * w;
+        L0 += float4(RemapLocalContrast(tapN, cn, finalSharpness), 1.0) * w;
     }
 
     [unroll]
@@ -898,24 +916,23 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
         int2 q = p + o;
 
         float3 tap = SafeLoadColor(q);
-        float tapLuma = Luma(tap);
+        float3 tapN = tap / localScale;
 
-        float depthW = DepthWeightTapGrad(centerDepth, diagDepths[k], depthGrad, o);
-        float lumaW = LumaSimilarityWeight(centerLuma, tapLuma);
+        float w = DepthWeightTapGrad(centerDepth, diagDepths[k], depthGrad, o);
 
-        float w = depthW * lumaW;
-
-        G1 += float4(tap, 1.0) * w;
-        L0 += float4(RemapLocalContrast(tap, c, finalSharpness), 1.0) * w;
+        G1 += float4(tapN, 1.0) * w;
+        L0 += float4(RemapLocalContrast(tapN, cn, finalSharpness), 1.0) * w;
     }
 
     G1.rgb /= max(G1.w, 1e-5);
     L0.rgb /= max(L0.w, 1e-5);
 
-    float3 output = (c - L0.rgb) + G1.rgb;
+    float3 output = ((cn - L0.rgb) + G1.rgb) * localScale;
 
     if (Debug > 0)
+    {
         output = ApplyDebugTint(output, Sharpness, adaptiveSharpness, edgeSharpness, finalSharpness, distanceBoost, Debug);
+    }
 
     if (ClampOutput > 0)
         output = saturate(output);
