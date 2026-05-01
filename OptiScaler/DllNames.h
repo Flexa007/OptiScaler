@@ -46,6 +46,8 @@ DEFINE_NAME_VECTORS(overlay, "eosovh-win32-shipping",
                              "owutils",                 // Overwolf
                              "galaxy",
                              "galaxy64",                // GOG Galaxy
+                             "discordhook",
+                             "discordhook64",
                              "discordoverlay",
                              "discordoverlay64",        // Discord
                              "overlay64",
@@ -59,6 +61,8 @@ DEFINE_NAME_VECTORS(blockOverlay, "eosovh-win32-shipping",
                                   "owclient"
                                   "galaxy",
                                   "galaxy64", 
+                                  "discordhook",
+                                  "discordhook64",
                                   "discordoverlay", 
                                   "discordoverlay64", 
                                   "overlay64", 
