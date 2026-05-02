@@ -73,6 +73,8 @@ static bool isUpscalerActive = false;
 static std::shared_mutex computeSigatureMutex;
 static std::shared_mutex graphSigatureMutex;
 
+static bool _supportsAtomicInt64 = false;
+
 // Intel Atomic Extension
 struct UE_D3D12_RESOURCE_DESC
 {
@@ -777,7 +779,10 @@ static HRESULT hkCheckFeatureSupport(ID3D12Device* device, D3D12_FEATURE Feature
         LOG_INFO("Spoofing AtomicInt64OnTypedResourceSupported {} -> 1",
                  featureSupport->AtomicInt64OnTypedResourceSupported);
 
-        featureSupport->AtomicInt64OnTypedResourceSupported = 1;
+        _supportsAtomicInt64 = featureSupport->AtomicInt64OnTypedResourceSupported == 1;
+
+        if (!_supportsAtomicInt64)
+            featureSupport->AtomicInt64OnTypedResourceSupported = 1;
     }
 
     return result;
@@ -790,7 +795,7 @@ static HRESULT hkCreateCommittedResource(ID3D12Device* device, const D3D12_HEAP_
                                          const D3D12_CLEAR_VALUE* pOptimizedClearValue, REFIID riidResource,
                                          void** ppvResource)
 {
-    if (!_skipCommitedResource)
+    if (!_skipCommitedResource && !_supportsAtomicInt64)
     {
         D3D12_RESOURCE_DESC localDesc = {};
         memcpy(&localDesc, pDesc, sizeof(D3D12_RESOURCE_DESC));
@@ -822,7 +827,7 @@ static HRESULT hkCreatePlacedResource(ID3D12Device* device, ID3D12Heap* pHeap, U
                                       const D3D12_RESOURCE_DESC* pDesc, D3D12_RESOURCE_STATES InitialState,
                                       const D3D12_CLEAR_VALUE* pOptimizedClearValue, REFIID riid, void** ppvResource)
 {
-    if (!skipPlacedResource)
+    if (!skipPlacedResource && !_supportsAtomicInt64)
     {
         D3D12_RESOURCE_DESC localDesc = {};
         memcpy(&localDesc, pDesc, sizeof(D3D12_RESOURCE_DESC));
@@ -889,7 +894,7 @@ VALIDATE_HOOK(hkGetResourceAllocationInfo, PFN_GetResourceAllocationInfo)
 static D3D12_RESOURCE_ALLOCATION_INFO STDMETHODCALLTYPE hkGetResourceAllocationInfo(
     ID3D12Device* device, UINT visibleMask, UINT numResourceDescs, const D3D12_RESOURCE_DESC* pResourceDescs)
 {
-    if (!_skipGetResourceAllocationInfo)
+    if (!_skipGetResourceAllocationInfo && !_supportsAtomicInt64)
     {
         auto ueDesc = reinterpret_cast<const UE_D3D12_RESOURCE_DESC*>(pResourceDescs);
 
