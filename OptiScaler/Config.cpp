@@ -1391,10 +1391,24 @@ bool Config::SaveIni()
 
 bool Config::ReloadFakenvapi()
 {
-    auto FN_iniPath = Config::Instance()->MainDllPath.value() + L"\\fakenvapi.ini";
-    if (NvapiDllPath.has_value())
-        FN_iniPath = std::filesystem::path(NvapiDllPath.value()).parent_path() / L"\\fakenvapi.ini";
+    std::wstring FN_iniPath;
 
+    auto nvapiPath = std::filesystem::path(MainDllPath.value());
+
+    if (std::filesystem::is_directory(nvapiPath))
+        FN_iniPath = nvapiPath / L"fakenvapi.ini";
+    else
+        FN_iniPath = nvapiPath.parent_path() / L"fakenvapi.ini";
+
+    if (NvapiDllPath.has_value())
+    {
+        auto nvapiPath = std::filesystem::path(NvapiDllPath.value());
+
+        if (std::filesystem::is_directory(nvapiPath))
+            FN_iniPath = nvapiPath / L"fakenvapi.ini";
+        else
+            FN_iniPath = nvapiPath.parent_path() / L"fakenvapi.ini";
+    }
     auto pathWStr = FN_iniPath;
 
     LOG_INFO("Trying to load fakenvapi's ini from: {0}", wstring_to_string(pathWStr));
@@ -1415,9 +1429,24 @@ bool Config::ReloadFakenvapi()
 
 bool Config::SaveFakenvapiIni()
 {
-    auto FN_iniPath = Config::Instance()->MainDllPath.value() + L"\\fakenvapi.ini";
+    std::wstring FN_iniPath;
+
+    auto nvapiPath = std::filesystem::path(MainDllPath.value());
+
+    if (std::filesystem::is_directory(nvapiPath))
+        FN_iniPath = nvapiPath / L"fakenvapi.ini";
+    else
+        FN_iniPath = nvapiPath.parent_path() / L"fakenvapi.ini";
+
     if (NvapiDllPath.has_value())
-        FN_iniPath = std::filesystem::path(NvapiDllPath.value()).parent_path() / L"\\fakenvapi.ini";
+    {
+        auto nvapiPath = std::filesystem::path(NvapiDllPath.value());
+
+        if (std::filesystem::is_directory(nvapiPath))
+            FN_iniPath = nvapiPath / L"fakenvapi.ini";
+        else
+            FN_iniPath = nvapiPath.parent_path() / L"fakenvapi.ini";
+    }
 
     auto pathWStr = FN_iniPath;
 

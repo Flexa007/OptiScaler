@@ -1678,11 +1678,33 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 
         // Main Opti DLL path
         if (!Config::Instance()->MainDllPath.has_value())
+        {
             Config::Instance()->MainDllPath.set_volatile_value(Util::ExePath().parent_path() / L".");
 
-        if (!Config::Instance()->PluginPath.has_value())
+            Config::Instance()->MainDllPath.set_volatile_value(
+                std::filesystem::absolute(Config::Instance()->MainDllPath.value()));
+        }
+
+        // If path is not correct
+        if (!std::filesystem::exists(Config::Instance()->MainDllPath.value()) ||
+            !std::filesystem::is_directory(Config::Instance()->MainDllPath.value()))
+        {
+            LOG_ERROR("MainDllPath does not exist or wrong: {}",
+                      wstring_to_string(Config::Instance()->MainDllPath.value()));
+
+            Config::Instance()->MainDllPath.set_volatile_value(Util::ExePath().parent_path() / L".");
+        }
+
+        // If path is not set or incorrect
+        if (!Config::Instance()->PluginPath.has_value() ||
+            (!std::filesystem::exists(Config::Instance()->PluginPath.value()) ||
+             !std::filesystem::is_directory(Config::Instance()->PluginPath.value())))
+        {
             Config::Instance()->PluginPath.set_volatile_value(
                 std::filesystem::path(Config::Instance()->MainDllPath.value()) / L"plugins");
+
+            LOG_WARN("PluginPath updated: {}", wstring_to_string(Config::Instance()->PluginPath.value()));
+        }
 
         CheckForExcludedProcess();
 
@@ -1715,7 +1737,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         spdlog::warn("If you paid for these files, you've been scammed!");
         spdlog::warn("DO NOT USE IN MULTIPLAYER GAMES");
         spdlog::info("");
-        spdlog::info("LogLevel: {0}", Config::Instance()->LogLevel.value_or_default());
+        spdlog::info("LogLevel: {}", Config::Instance()->LogLevel.value_or_default());
 
         spdlog::info("");
         if (Util::GetRealWindowsVersion(winVer))
