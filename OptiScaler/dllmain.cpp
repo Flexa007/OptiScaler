@@ -1751,21 +1751,24 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         // Main Opti DLL path
         if (!Config::Instance()->MainDllPath.has_value())
         {
-            Config::Instance()->MainDllPath.set_volatile_value(Util::ExePath().parent_path() / L".");
-
-            Config::Instance()->MainDllPath.set_volatile_value(
-                std::filesystem::absolute(Config::Instance()->MainDllPath.value()));
+            Config::Instance()->MainDllPath.set_volatile_value(L"OptiScaler");
         }
 
-        // If path is not correct
+        if (std::filesystem::path mainDllPath(Config::Instance()->MainDllPath.value()); mainDllPath.is_relative())
+        {
+            Config::Instance()->MainDllPath.set_volatile_value(Util::ExePath().parent_path() / mainDllPath);
+        }
+
+        // If path is invalid or doesn't exist, use the exe folder as main
         if (!std::filesystem::exists(Config::Instance()->MainDllPath.value()) ||
             !std::filesystem::is_directory(Config::Instance()->MainDllPath.value()))
         {
-            LOG_ERROR("MainDllPath does not exist or wrong: {}",
-                      wstring_to_string(Config::Instance()->MainDllPath.value()));
-
-            Config::Instance()->MainDllPath.set_volatile_value(Util::ExePath().parent_path() / L".");
+            Config::Instance()->MainDllPath.set_volatile_value(Util::ExePath().parent_path());
         }
+
+        // Clean up path
+        Config::Instance()->MainDllPath.set_volatile_value(
+            std::filesystem::absolute(Config::Instance()->MainDllPath.value()));
 
         // If path is not set or incorrect
         if (!Config::Instance()->PluginPath.has_value() ||
@@ -1774,8 +1777,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         {
             Config::Instance()->PluginPath.set_volatile_value(
                 std::filesystem::path(Config::Instance()->MainDllPath.value()) / L"plugins");
-
-            LOG_WARN("PluginPath updated: {}", wstring_to_string(Config::Instance()->PluginPath.value()));
         }
 
         CheckForExcludedProcess();
