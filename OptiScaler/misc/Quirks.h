@@ -121,6 +121,10 @@ static const QuirkEntry quirkTable[] = {
     // Arknights: Endfield
     QUIRK_ENTRY("endfield.exe", GameQuirk::ForceCreateD3D12Device, GameQuirk::DisableFakenvapi),
 
+    // Neverness to Everness
+    // Kernel hooks required to unlock DLSS inputs
+    QUIRK_ENTRY("htgame.exe", GameQuirk::DisableFSR2Inputs, GameQuirk::DisableFSR3Inputs, GameQuirk::DontUseNtDllHooks),
+
     // Trails in the Sky 1st Chapter
     QUIRK_ENTRY("sora_1st.exe", GameQuirk::UseFsr2Dx11Inputs, GameQuirk::DisableDxgiSpoofing),
 
