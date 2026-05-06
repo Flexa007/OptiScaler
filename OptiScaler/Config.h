@@ -308,6 +308,9 @@ class Config
     CustomOptional<float> MenuAccentColorR { 0.01f };
     CustomOptional<float> MenuAccentColorG { 0.18f };
     CustomOptional<float> MenuAccentColorB { 0.34f };
+    CustomOptional<float> MenuBGColorR { 0.0f };
+    CustomOptional<float> MenuBGColorG { 0.0f };
+    CustomOptional<float> MenuBGColorB { 0.0f };
 
     // Hooks
     CustomOptional<bool> HookOriginalNvngxOnly { false };

@@ -428,6 +428,9 @@ bool Config::Reload(std::filesystem::path iniPath)
             MenuAccentColorR.set_from_config(readFloat("Menu", "AccentColorR"));
             MenuAccentColorG.set_from_config(readFloat("Menu", "AccentColorG"));
             MenuAccentColorB.set_from_config(readFloat("Menu", "AccentColorB"));
+            MenuBGColorR.set_from_config(readFloat("Menu", "BGColorR"));
+            MenuBGColorG.set_from_config(readFloat("Menu", "BGColorG"));
+            MenuBGColorB.set_from_config(readFloat("Menu", "BGColorB"));
         }
 
         // Hooks
@@ -1101,6 +1104,9 @@ bool Config::SaveIni()
                      GetFloatValue(Instance()->MenuAccentColorG.value_for_config()).c_str());
         ini.SetValue("Menu", "MenuAccentColorB",
                      GetFloatValue(Instance()->MenuAccentColorB.value_for_config()).c_str());
+        ini.SetValue("Menu", "MenuBGColorR", GetFloatValue(Instance()->MenuBGColorR.value_for_config()).c_str());
+        ini.SetValue("Menu", "MenuBGColorG", GetFloatValue(Instance()->MenuBGColorG.value_for_config()).c_str());
+        ini.SetValue("Menu", "MenuBGColorB", GetFloatValue(Instance()->MenuBGColorB.value_for_config()).c_str());
     }
 
     // Hooks
