@@ -1275,10 +1275,12 @@ ULONG FGHooks::hkFGRelease(IUnknown* This)
 
             WaitForGPUIdle();
 
+            DXGI_SWAP_CHAIN_DESC scDesc {};
+            ((IDXGISwapChain*) This)->GetDesc(&scDesc);
+
             // Release swapchain backbuffers to prevent errors when releasing FG swapchain
-            if (State::Instance().activeFgOutput == FGOutput::XeFG)
             {
-                for (UINT i = 0; i < 8; i++)
+                for (UINT i = 0; i < scDesc.BufferCount; i++)
                 {
                     ID3D12Resource* backBuffer = nullptr;
                     auto bbResult = ((IDXGISwapChain*) This)->GetBuffer(i, IID_PPV_ARGS(&backBuffer));
