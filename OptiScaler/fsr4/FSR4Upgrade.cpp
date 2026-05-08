@@ -27,6 +27,8 @@
 #undef FFX_API_CONFIGURE_FG_SWAPCHAIN_KEY_WAITCALLBACK
 #undef FFX_API_CONFIGURE_FG_SWAPCHAIN_KEY_FRAMEPACINGTUNING
 
+#pragma intrinsic(_ReturnAddress)
+
 static HMODULE moduleAmdxc64 = nullptr;
 static HMODULE moduleAmdxcffx64 = nullptr;
 
@@ -231,6 +233,15 @@ struct AmdExtFfxApi : public IAmdExtFfxApi
 
     HRESULT STDMETHODCALLTYPE UpdateFfxApiProvider(void* pData, uint32_t dataSizeInBytes) override
     {
+        auto returnAddress = _ReturnAddress();
+        auto callerModule = Util::GetCallerModule(returnAddress);
+
+        if (callerModule == exeModule)
+        {
+            LOG_WARN("Called from game module, returning E_NOINTERFACE");
+            return E_NOINTERFACE;
+        }
+
         auto effectType = FfxApiProxy::GetType(reinterpret_cast<ExternalProviderData*>(pData)->descType);
 
         auto effect = magic_enum::enum_name(effectType);
