@@ -306,9 +306,9 @@ class Config
     CustomOptional<std::wstring, NoDefault> TTFFontPath;
     CustomOptional<int> FGShortcutKey { VK_END };
     CustomOptional<bool> LightTheme { false };
-    CustomOptional<float> MenuAccentColorR { 0.01f };
-    CustomOptional<float> MenuAccentColorG { 0.18f };
-    CustomOptional<float> MenuAccentColorB { 0.34f };
+    CustomOptional<float> MenuAccentColorR { 0.00f };
+    CustomOptional<float> MenuAccentColorG { 0.40f };
+    CustomOptional<float> MenuAccentColorB { 0.77f };
     CustomOptional<float> MenuBGColorR { 0.0f };
     CustomOptional<float> MenuBGColorG { 0.0f };
     CustomOptional<float> MenuBGColorB { 0.0f };

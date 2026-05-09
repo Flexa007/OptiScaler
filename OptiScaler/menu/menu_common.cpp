@@ -1615,12 +1615,12 @@ static void ApplyThemeStyle()
     bool lightTheme = conf->LightTheme.value_or_default();
 
     style.WindowRounding = 2.0f;
-    style.ChildRounding = 0.0f;
-    style.FrameRounding = 1.0f;
+    style.ChildRounding = 1.0f;
+    style.FrameRounding = 2.0f;
     style.PopupRounding = 2.0f;
-    style.ScrollbarRounding = 1.0f;
-    style.GrabRounding = 1.0f;
-    style.TabRounding = 1.0f;
+    style.ScrollbarRounding = 2.0f;
+    style.GrabRounding = 2.0f;
+    style.TabRounding = 2.0f;
 
     style.WindowBorderSize = 1.0f;
     style.PopupBorderSize = 1.0f;
@@ -1652,37 +1652,11 @@ static void ApplyThemeStyle()
     ImVec4 bgAccent = ImVec4(conf->MenuBGColorR.value_or_default(), conf->MenuBGColorG.value_or_default(),
                              conf->MenuBGColorB.value_or_default(), 1.0f);
 
-    accent.x = Clamp01(accent.x);
-    accent.y = Clamp01(accent.y);
-    accent.z = Clamp01(accent.z);
-    accent.w = 1.0f;
-
-    bgAccent.x = Clamp01(bgAccent.x);
-    bgAccent.y = Clamp01(bgAccent.y);
-    bgAccent.z = Clamp01(bgAccent.z);
-    bgAccent.w = 1.0f;
-
-    accent = Saturate(accent, lightTheme ? 1.35f : 1.25f);
     float luminance = Luminance(accent);
-
-    if (!lightTheme && luminance < 0.25f)
-    {
-        accent.x = std::min(accent.x * 1.8f + 0.08f, 1.0f);
-        accent.y = std::min(accent.y * 1.8f + 0.08f, 1.0f);
-        accent.z = std::min(accent.z * 1.8f + 0.08f, 1.0f);
-    }
-
-    if (lightTheme && luminance > 0.72f)
-    {
-        accent.x *= 0.55f;
-        accent.y *= 0.55f;
-        accent.z *= 0.55f;
-    }
 
     const ImVec4 bgDark = lightTheme ? ImVec4(0.80f, 0.82f, 0.86f, 1.00f) : ImVec4(0.09f, 0.09f, 0.10f, 1.00f);
     const ImVec4 bgMid = lightTheme ? ImVec4(0.89f, 0.91f, 0.95f, 1.00f) : ImVec4(0.11f, 0.11f, 0.12f, 1.00f);
     const ImVec4 bgLight = lightTheme ? ImVec4(0.96f, 0.97f, 0.99f, 1.00f) : ImVec4(0.14f, 0.14f, 0.15f, 1.00f);
-    const ImVec4 bgTitle = lightTheme ? ImVec4(0.70f, 0.75f, 0.83f, 1.00f) : ImVec4(0.07f, 0.07f, 0.08f, 1.00f);
 
     const ImVec4 textPrimary = lightTheme ? ImVec4(0.05f, 0.06f, 0.08f, 1.00f) : ImVec4(0.90f, 0.93f, 0.95f, 1.00f);
     const ImVec4 textDim = lightTheme ? ImVec4(0.22f, 0.25f, 0.31f, 1.00f) : ImVec4(0.54f, 0.58f, 0.62f, 1.00f);
@@ -1707,6 +1681,8 @@ static void ApplyThemeStyle()
 
     auto AccentStrong = [&](float alpha = 1.0f) { return ImVec4(accent.x, accent.y, accent.z, alpha); };
 
+    const ImVec4 bgTitle = AccentSoft();
+
     auto SurfaceHover = [&](float alpha = 1.0f)
     { return lightTheme ? Mix(bgLight, accent, 0.12f, alpha) : Mix(bgLight, accent, 0.18f, alpha); };
 
@@ -1720,14 +1696,12 @@ static void ApplyThemeStyle()
     {
         if (lightTheme)
         {
-            ImVec4 dark = Mix(accent, ImVec4(0.00f, 0.00f, 0.00f, 1.00f), 0.25f, alpha);
-
-            return ImVec4(std::min(dark.x, 0.55f), std::min(dark.y, 0.60f), std::min(dark.z, 0.70f), alpha);
+            // Darken slightly for contrast on light bg — no channel floors
+            return Mix(accent, ImVec4(0.00f, 0.00f, 0.00f, 1.00f), 0.20f, alpha);
         }
 
-        ImVec4 bright = Mix(accent, ImVec4(1.00f, 1.00f, 1.00f, 1.00f), 0.45f, alpha);
-
-        return ImVec4(std::max(bright.x, 0.45f), std::max(bright.y, 0.55f), std::max(bright.z, 0.70f), alpha);
+        // Brighten slightly for visibility on dark bg — no channel floors
+        return Mix(accent, ImVec4(1.00f, 1.00f, 1.00f, 1.00f), 0.35f, alpha);
     };
 
     auto PlotAccentHovered = [&](float alpha = 1.0f)
@@ -1742,24 +1716,18 @@ static void ApplyThemeStyle()
 
     auto AccentReadable = [&](float alpha = 1.0f)
     {
-        float lum = Luminance(accent);
+        // Apply saturation boost and luminance correction only here,
+        // so AccentStrong / AccentMed / AccentSoft stay true to the user's pick.
+        ImVec4 a = Saturate(accent, lightTheme ? 1.35f : 1.25f);
+        float lum = Luminance(a);
 
-        if (lightTheme)
-        {
-            if (lum > 0.72f)
-            {
-                return Mix(accent, ImVec4(0.0f, 0.0f, 0.0f, 1.0f), 0.35f, alpha);
-            }
+        if (lightTheme && lum > 0.72f)
+            a = Mix(a, ImVec4(0.0f, 0.0f, 0.0f, 1.0f), 0.35f, 1.0f);
 
-            return ImVec4(accent.x, accent.y, accent.z, alpha);
-        }
+        if (!lightTheme && lum < 0.25f)
+            a = Mix(a, ImVec4(1.0f, 1.0f, 1.0f, 1.0f), 0.30f, 1.0f);
 
-        if (lum < 0.25f)
-        {
-            return Mix(accent, ImVec4(1.0f, 1.0f, 1.0f, 1.0f), 0.25f, alpha);
-        }
-
-        return ImVec4(accent.x, accent.y, accent.z, alpha);
+        return ImVec4(a.x, a.y, a.z, alpha);
     };
 
     ImVec4* c = ImGui::GetStyle().Colors;
@@ -5800,11 +5768,11 @@ bool MenuCommon::RenderMenu()
                     bool lightTheme = config->LightTheme.value_or_default();
 
                     const ImVec4 bgDark =
-                        lightTheme ? ImVec4(0.80f, 0.82f, 0.86f, 1.00f) : ImVec4(0.09f, 0.10f, 0.13f, 1.00f);
+                        lightTheme ? ImVec4(0.80f, 0.82f, 0.86f, 1.00f) : ImVec4(0.09f, 0.09f, 0.10f, 1.00f);
                     const ImVec4 bgMid =
-                        lightTheme ? ImVec4(0.89f, 0.91f, 0.95f, 1.00f) : ImVec4(0.11f, 0.13f, 0.16f, 1.00f);
+                        lightTheme ? ImVec4(0.89f, 0.91f, 0.95f, 1.00f) : ImVec4(0.11f, 0.11f, 0.12f, 1.00f);
                     const ImVec4 bgLight =
-                        lightTheme ? ImVec4(0.96f, 0.97f, 0.99f, 1.00f) : ImVec4(0.13f, 0.15f, 0.21f, 1.00f);
+                        lightTheme ? ImVec4(0.96f, 0.97f, 0.99f, 1.00f) : ImVec4(0.14f, 0.14f, 0.15f, 1.00f);
 
                     auto Mix = [](const ImVec4& a, const ImVec4& b, float t, float alpha = 1.0f)
                     { return ImVec4(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, alpha); };
@@ -5818,36 +5786,6 @@ bool MenuCommon::RenderMenu()
                     auto AccentStrong = [&](ImVec4 accent, float alpha = 1.0f)
                     { return ImVec4(accent.x, accent.y, accent.z, alpha); };
 
-                    auto getAccentColor = [&](ImVec4 accent)
-                    {
-                        auto Clamp01 = [](float v) { return std::max(0.0f, std::min(v, 1.0f)); };
-
-                        accent.x = Clamp01(accent.x);
-                        accent.y = Clamp01(accent.y);
-                        accent.z = Clamp01(accent.z);
-                        accent.w = 1.0f;
-
-                        float luminance = accent.x * 0.2126f + accent.y * 0.7152f + accent.z * 0.0722f;
-
-                        // Keep dark-theme accents from becoming too dark.
-                        if (!lightTheme && luminance < 0.25f)
-                        {
-                            accent.x = std::min(accent.x * 1.8f + 0.08f, 1.0f);
-                            accent.y = std::min(accent.y * 1.8f + 0.08f, 1.0f);
-                            accent.z = std::min(accent.z * 1.8f + 0.08f, 1.0f);
-                        }
-
-                        // Keep light-theme accents from becoming too light.
-                        if (lightTheme && luminance > 0.72f)
-                        {
-                            accent.x *= 0.55f;
-                            accent.y *= 0.55f;
-                            accent.z *= 0.55f;
-                        }
-
-                        return accent;
-                    };
-
                     if (ImGui::Checkbox("Light Theme", &lightTheme))
                     {
                         config->LightTheme = lightTheme;
@@ -5856,12 +5794,20 @@ bool MenuCommon::RenderMenu()
 
                     ImGui::SeparatorText("Accent Colour");
 
-                    ImVec4 color = { 0.0f, 0.0f, 0.0f, 1.0f };
+                    ImGui::Text("Presets:");
+                    ImGui::SameLine(0.0f, 6.0f);
 
-                    color.x = 0.01f;
-                    color.y = 0.18f;
-                    color.z = 0.34f;
-                    color = getAccentColor(color);
+                    ImVec4 colorBlue = { 0.00f, 0.40f, 0.77f, 1.0f };
+                    ImVec4 colorTeal = { 0.00f, 1.00f, 0.91f, 1.0f };
+                    ImVec4 colorGray = { 0.54f, 0.54f, 0.54f, 1.0f };
+                    ImVec4 colorYellow = { 1.00f, 0.89f, 0.00f, 1.0f };
+                    ImVec4 colorGreen = { 0.25f, 1.00f, 0.00f, 1.0f };
+                    ImVec4 colorRed = { 1.00f, 0.00f, 0.00f, 1.0f };
+                    ImVec4 colorOrange = { 1.00f, 0.52f, 0.00f, 1.0f };
+
+                    ImVec4 color = {};
+
+                    color = colorBlue;
                     ImGui::PushStyleColor(ImGuiCol_Button, AccentSoft(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AccentMed(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, AccentStrong(color));
@@ -5882,10 +5828,7 @@ bool MenuCommon::RenderMenu()
 
                     ImGui::SameLine(0.0f, 6.0f);
 
-                    color.x = 0.11f;
-                    color.y = 0.78f;
-                    color.z = 0.72f;
-                    color = getAccentColor(color);
+                    color = colorTeal;
                     ImGui::PushStyleColor(ImGuiCol_Button, AccentSoft(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AccentMed(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, AccentStrong(color));
@@ -5906,10 +5849,7 @@ bool MenuCommon::RenderMenu()
 
                     ImGui::SameLine(0.0f, 6.0f);
 
-                    color.x = 0.29f;
-                    color.y = 0.38f;
-                    color.z = 0.34f;
-                    color = getAccentColor(color);
+                    color = colorGray;
                     ImGui::PushStyleColor(ImGuiCol_Button, AccentSoft(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AccentMed(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, AccentStrong(color));
@@ -5930,10 +5870,7 @@ bool MenuCommon::RenderMenu()
 
                     ImGui::SameLine(0.0f, 6.0f);
 
-                    color.x = 0.81f;
-                    color.y = 0.66f;
-                    color.z = 0.10f;
-                    color = getAccentColor(color);
+                    color = colorYellow;
                     ImGui::PushStyleColor(ImGuiCol_Button, AccentSoft(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AccentMed(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, AccentStrong(color));
@@ -5954,10 +5891,7 @@ bool MenuCommon::RenderMenu()
 
                     ImGui::SameLine(0.0f, 6.0f);
 
-                    color.x = 0.25f;
-                    color.y = 0.52f;
-                    color.z = 0.16f;
-                    color = getAccentColor(color);
+                    color = colorGreen;
                     ImGui::PushStyleColor(ImGuiCol_Button, AccentSoft(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AccentMed(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, AccentStrong(color));
@@ -5978,10 +5912,7 @@ bool MenuCommon::RenderMenu()
 
                     ImGui::SameLine(0.0f, 6.0f);
 
-                    color.x = 0.72f;
-                    color.y = 0.17f;
-                    color.z = 0.17f;
-                    color = getAccentColor(color);
+                    color = colorRed;
                     ImGui::PushStyleColor(ImGuiCol_Button, AccentSoft(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AccentMed(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, AccentStrong(color));
@@ -6002,10 +5933,7 @@ bool MenuCommon::RenderMenu()
 
                     ImGui::SameLine(0.0f, 6.0f);
 
-                    color.x = 1.00f;
-                    color.y = 0.63f;
-                    color.z = 0.29f;
-                    color = getAccentColor(color);
+                    color = colorOrange;
                     ImGui::PushStyleColor(ImGuiCol_Button, AccentSoft(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AccentMed(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, AccentStrong(color));
@@ -6040,9 +5968,9 @@ bool MenuCommon::RenderMenu()
 
                     if (ImGui::Button("Reset Accent Colour"))
                     {
-                        config->MenuBGColorR.reset();
-                        config->MenuBGColorG.reset();
-                        config->MenuBGColorB.reset();
+                        config->MenuAccentColorR.reset();
+                        config->MenuAccentColorG.reset();
+                        config->MenuAccentColorB.reset();
                         ApplyThemeStyle();
                     }
 
@@ -6050,10 +5978,10 @@ bool MenuCommon::RenderMenu()
 
                     ImGui::SeparatorText("Background Colour");
 
-                    color.x = 0.01f;
-                    color.y = 0.18f;
-                    color.z = 0.34f;
-                    color = getAccentColor(color);
+                    ImGui::Text("Presets:");
+                    ImGui::SameLine(0.0f, 6.0f);
+
+                    color = colorBlue;
                     ImGui::PushStyleColor(ImGuiCol_Button, AccentSoft(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AccentMed(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, AccentStrong(color));
@@ -6074,10 +6002,7 @@ bool MenuCommon::RenderMenu()
 
                     ImGui::SameLine(0.0f, 6.0f);
 
-                    color.x = 0.11f;
-                    color.y = 0.78f;
-                    color.z = 0.72f;
-                    color = getAccentColor(color);
+                    color = colorTeal;
                     ImGui::PushStyleColor(ImGuiCol_Button, AccentSoft(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AccentMed(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, AccentStrong(color));
@@ -6098,10 +6023,7 @@ bool MenuCommon::RenderMenu()
 
                     ImGui::SameLine(0.0f, 6.0f);
 
-                    color.x = 0.29f;
-                    color.y = 0.38f;
-                    color.z = 0.34f;
-                    color = getAccentColor(color);
+                    color = colorGray;
                     ImGui::PushStyleColor(ImGuiCol_Button, AccentSoft(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AccentMed(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, AccentStrong(color));
@@ -6122,10 +6044,7 @@ bool MenuCommon::RenderMenu()
 
                     ImGui::SameLine(0.0f, 6.0f);
 
-                    color.x = 0.81f;
-                    color.y = 0.66f;
-                    color.z = 0.10f;
-                    color = getAccentColor(color);
+                    color = colorYellow;
                     ImGui::PushStyleColor(ImGuiCol_Button, AccentSoft(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AccentMed(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, AccentStrong(color));
@@ -6146,10 +6065,7 @@ bool MenuCommon::RenderMenu()
 
                     ImGui::SameLine(0.0f, 6.0f);
 
-                    color.x = 0.25f;
-                    color.y = 0.52f;
-                    color.z = 0.16f;
-                    color = getAccentColor(color);
+                    color = colorGreen;
                     ImGui::PushStyleColor(ImGuiCol_Button, AccentSoft(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AccentMed(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, AccentStrong(color));
@@ -6170,10 +6086,7 @@ bool MenuCommon::RenderMenu()
 
                     ImGui::SameLine(0.0f, 6.0f);
 
-                    color.x = 0.72f;
-                    color.y = 0.17f;
-                    color.z = 0.17f;
-                    color = getAccentColor(color);
+                    color = colorRed;
                     ImGui::PushStyleColor(ImGuiCol_Button, AccentSoft(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AccentMed(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, AccentStrong(color));
@@ -6194,10 +6107,7 @@ bool MenuCommon::RenderMenu()
 
                     ImGui::SameLine(0.0f, 6.0f);
 
-                    color.x = 1.00f;
-                    color.y = 0.63f;
-                    color.z = 0.29f;
-                    color = getAccentColor(color);
+                    color = colorOrange;
                     ImGui::PushStyleColor(ImGuiCol_Button, AccentSoft(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AccentMed(color));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, AccentStrong(color));
