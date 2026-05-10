@@ -471,8 +471,8 @@ class Config
     CustomOptional<bool> FGVelocityValidNow { false };
     CustomOptional<bool> FGHudlessValidNow { false };
     CustomOptional<bool> FGOnlyAcceptFirstHudless { false };
-    CustomOptional<bool> FGPreserveSwapChain { true };
-    CustomOptional<bool> FGSkipResizeBuffers { true };
+    CustomOptional<bool> FGPreserveSwapChain { false };
+    CustomOptional<bool> FGSkipResizeBuffers { false };
     CustomOptional<bool> FGModifyBufferState { false };
     CustomOptional<bool> FGModifySCIndex { false };
     CustomOptional<FrameTimeSource> FTInput { FrameTimeSource::Input };
