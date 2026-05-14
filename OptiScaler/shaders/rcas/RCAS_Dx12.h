@@ -97,7 +97,7 @@ class RCAS_Dx12 : public Shader_Dx12
     bool DispatchDepthAdaptive(ID3D12Device* InDevice, ID3D12GraphicsCommandList* InCmdList, ID3D12Resource* InResource,
                                ID3D12Resource* InMotionVectors, ID3D12Resource* InDepth, RcasConstants InConstants,
                                ID3D12Resource* OutResource, FrameDescriptorHeap& currentHeap);
-    bool DispatchLCDepthAdaptive(ID3D12Device* InDevice, ID3D12GraphicsCommandList* InCmdList,
+    bool DispatchDASDepthAdaptive(ID3D12Device* InDevice, ID3D12GraphicsCommandList* InCmdList,
                                  ID3D12Resource* InResource, ID3D12Resource* InMotionVectors, ID3D12Resource* InDepth,
                                  RcasConstants InConstants, ID3D12Resource* OutResource,
                                  FrameDescriptorHeap& currentHeap);

@@ -3,8 +3,8 @@
 #include "RCAS_Vk.h"
 
 #include "precompile/RCAS_Shader_Vk.h"
-#include "precompile/da_sharpen_Shader_Vk.h"
-#include "precompile/lc_da_sharpen_Shader_Vk.h"
+#include "precompile/da_das_sharpen_Shader_Vk.h"
+#include "precompile/da_rcas_sharpen_Shader_Vk.h"
 
 #include <Config.h>
 
@@ -21,16 +21,16 @@ RCAS_Vk::RCAS_Vk(std::string InName, VkDevice InDevice, VkPhysicalDevice InPhysi
 
     CreateDescriptorSetLayout();
     CreateDescriptorSetLayoutDA();
-    CreateDescriptorSetLayoutLCDA();
+    CreateDescriptorSetLayoutDASDA();
     CreateConstantBuffer();
     CreateConstantBufferDA();
-    CreateConstantBufferLCDA();
+    CreateConstantBufferDASDA();
     CreateDescriptorPool();
     CreateDescriptorPoolDA();
-    CreateDescriptorPoolLCDA();
+    CreateDescriptorPoolDASDA();
     CreateDescriptorSets();
     CreateDescriptorSetsDA();
-    CreateDescriptorSetsLCDA();
+    CreateDescriptorSetsDASDA();
 
     // Create nearest sampler
     VkSamplerCreateInfo samplerInfo {};
@@ -49,18 +49,18 @@ RCAS_Vk::RCAS_Vk(std::string InName, VkDevice InDevice, VkPhysicalDevice InPhysi
         return;
     }
 
-    std::vector<char> shaderCodeDA(da_sharpen_spv, da_sharpen_spv + sizeof(da_sharpen_spv));
+    std::vector<char> shaderCodeDA(da_rcas_sharpen_spv, da_rcas_sharpen_spv + sizeof(da_rcas_sharpen_spv));
     if (!CreateComputePipeline(_device, _pipelineLayoutDA, &_pipelineDA, shaderCodeDA))
     {
-        LOG_ERROR("Failed to create pipeline for RCAS_Vk depth adaptive");
+        LOG_ERROR("Failed to create pipeline for RCAS_Vk RCAS depth adaptive");
         _init = false;
         return;
     }
 
-    std::vector<char> shaderCodeLCDA(lc_da_sharpen_spv, lc_da_sharpen_spv + sizeof(lc_da_sharpen_spv));
-    if (!CreateComputePipeline(_device, _pipelineLayoutLCDA, &_pipelineLCDA, shaderCodeLCDA))
+    std::vector<char> shaderCodeDASDA(da_das_sharpen_spv, da_das_sharpen_spv + sizeof(da_das_sharpen_spv));
+    if (!CreateComputePipeline(_device, _pipelineLayoutDASDA, &_pipelineDASDA, shaderCodeDASDA))
     {
-        LOG_ERROR("Failed to create pipeline for RCAS_Vk LC depth aware");
+        LOG_ERROR("Failed to create pipeline for RCAS_Vk DAS depth aware");
         _init = false;
         return;
     }
@@ -76,10 +76,10 @@ RCAS_Vk::~RCAS_Vk()
         _pipelineDA = VK_NULL_HANDLE;
     }
 
-    if (_pipelineLCDA != VK_NULL_HANDLE)
+    if (_pipelineDASDA != VK_NULL_HANDLE)
     {
-        vkDestroyPipeline(_device, _pipelineLCDA, nullptr);
-        _pipelineLCDA = VK_NULL_HANDLE;
+        vkDestroyPipeline(_device, _pipelineDASDA, nullptr);
+        _pipelineDASDA = VK_NULL_HANDLE;
     }
 
     if (_descriptorPoolDA != VK_NULL_HANDLE)
@@ -124,10 +124,10 @@ RCAS_Vk::~RCAS_Vk()
         _pipelineLayoutDA = VK_NULL_HANDLE;
     }
 
-    if (_pipelineLayoutLCDA != VK_NULL_HANDLE)
+    if (_pipelineLayoutDASDA != VK_NULL_HANDLE)
     {
-        vkDestroyPipelineLayout(_device, _pipelineLayoutLCDA, nullptr);
-        _pipelineLayoutLCDA = VK_NULL_HANDLE;
+        vkDestroyPipelineLayout(_device, _pipelineLayoutDASDA, nullptr);
+        _pipelineLayoutDASDA = VK_NULL_HANDLE;
     }
 
     if (_pipelineLayout != VK_NULL_HANDLE)
@@ -293,7 +293,7 @@ void RCAS_Vk::CreateDescriptorSetLayoutDA()
     }
 }
 
-void RCAS_Vk::CreateDescriptorSetLayoutLCDA()
+void RCAS_Vk::CreateDescriptorSetLayoutDASDA()
 {
     VkDescriptorSetLayoutBinding uboLayoutBinding {};
     uboLayoutBinding.binding = 0;
@@ -344,7 +344,7 @@ void RCAS_Vk::CreateDescriptorSetLayoutLCDA()
     pipelineLayoutInfo.setLayoutCount = 1;
     pipelineLayoutInfo.pSetLayouts = &_descriptorSetLayoutLCDA;
 
-    if (vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_pipelineLayoutLCDA) != VK_SUCCESS)
+    if (vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_pipelineLayoutDASDA) != VK_SUCCESS)
     {
         LOG_ERROR("failed to create LC depth aware pipeline layout!");
     }
@@ -389,7 +389,7 @@ void RCAS_Vk::CreateDescriptorPoolDA()
         LOG_ERROR("failed to create depth aware descriptor pool!");
     }
 }
-void RCAS_Vk::CreateDescriptorPoolLCDA()
+void RCAS_Vk::CreateDescriptorPoolDASDA()
 {
     std::vector<VkDescriptorPoolSize> poolSizes = {
         { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) },
@@ -441,7 +441,7 @@ void RCAS_Vk::CreateDescriptorSetsDA()
     }
 }
 
-void RCAS_Vk::CreateDescriptorSetsLCDA()
+void RCAS_Vk::CreateDescriptorSetsDASDA()
 {
     std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, _descriptorSetLayoutLCDA);
     VkDescriptorSetAllocateInfo allocInfo {};
@@ -853,9 +853,9 @@ bool RCAS_Vk::DispatchDepthAdaptive(VkDevice InDevice, VkCommandBuffer InCmdList
     return true;
 }
 
-bool RCAS_Vk::DispatchLCDepthAdaptive(VkDevice InDevice, VkCommandBuffer InCmdList, RcasConstants InConstants,
-                                      VkImageView InResourceView, VkImageView InMotionVectorsView,
-                                      VkImageView OutResourceView, VkExtent2D OutExtent, VkImageView InDepthView)
+bool RCAS_Vk::DispatchDASDepthAdaptive(VkDevice InDevice, VkCommandBuffer InCmdList, RcasConstants InConstants,
+                                       VkImageView InResourceView, VkImageView InMotionVectorsView,
+                                       VkImageView OutResourceView, VkExtent2D OutExtent, VkImageView InDepthView)
 {
     (void) InDevice;
 
@@ -874,9 +874,9 @@ bool RCAS_Vk::DispatchLCDepthAdaptive(VkDevice InDevice, VkCommandBuffer InCmdLi
     UpdateDescriptorSetLCDA(InCmdList, _currentSetIndex, InResourceView, InMotionVectorsView, InDepthView,
                             OutResourceView);
 
-    vkCmdBindPipeline(InCmdList, VK_PIPELINE_BIND_POINT_COMPUTE, _pipelineLCDA);
+    vkCmdBindPipeline(InCmdList, VK_PIPELINE_BIND_POINT_COMPUTE, _pipelineDASDA);
 
-    vkCmdBindDescriptorSets(InCmdList, VK_PIPELINE_BIND_POINT_COMPUTE, _pipelineLayoutLCDA, 0, 1,
+    vkCmdBindDescriptorSets(InCmdList, VK_PIPELINE_BIND_POINT_COMPUTE, _pipelineLayoutDASDA, 0, 1,
                             &_descriptorSetsLCDA[_currentSetIndex], 0, nullptr);
 
     uint32_t groupX = (OutExtent.width + 15) / 16;
@@ -897,9 +897,16 @@ bool RCAS_Vk::Dispatch(VkDevice InDevice, VkCommandBuffer InCmdList, RcasConstan
     const bool useDepthAdaptive =
         Config::Instance()->UseDepthAwareSharpen.value_or_default() && InDepthView != VK_NULL_HANDLE;
 
+    const bool useDASDepthAdaptive =
+        Config::Instance()->UseDASDepthAwareSharpen.value_or_default() && InDepthView != VK_NULL_HANDLE;
+
     if (useDepthAdaptive)
         return DispatchDepthAdaptive(InDevice, InCmdList, InConstants, InResourceView, InMotionVectorsView,
                                      OutResourceView, OutExtent, InDepthView);
+
+    if (useDASDepthAdaptive)
+        return DispatchDASDepthAdaptive(InDevice, InCmdList, InConstants, InResourceView, InMotionVectorsView,
+                                        OutResourceView, OutExtent, InDepthView);
 
     return DispatchRCAS(InDevice, InCmdList, InConstants, InResourceView, InMotionVectorsView, OutResourceView,
                         OutExtent);
@@ -1101,7 +1108,7 @@ void RCAS_Vk::CreateConstantBufferDA()
     vkMapMemory(_device, _constantBufferMemoryDA, 0, bufferSize, 0, &_mappedConstantBufferDA);
 }
 
-void RCAS_Vk::CreateConstantBufferLCDA()
+void RCAS_Vk::CreateConstantBufferDASDA()
 {
     VkDeviceSize bufferSize = sizeof(InternalConstantsDA);
 

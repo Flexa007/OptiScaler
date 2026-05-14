@@ -73,7 +73,7 @@ class RCAS_Dx11
 
     ID3D11ComputeShader* _computeShader = nullptr;
     ID3D11ComputeShader* _computeShaderDA = nullptr;
-    ID3D11ComputeShader* _computeShaderLCDA = nullptr;
+    ID3D11ComputeShader* _computeShaderDASDA = nullptr;
     ID3D11Buffer* _constantBuffer = nullptr;
     ID3D11Texture2D* _buffer = nullptr;
     ID3D11ShaderResourceView* _srvInput = nullptr;
@@ -99,7 +99,7 @@ class RCAS_Dx11
     bool DispatchDepthAdaptive(ID3D11Device* InDevice, ID3D11DeviceContext* InContext, ID3D11Texture2D* InResource,
                                ID3D11Texture2D* InMotionVectors, ID3D11Texture2D* InDepth, RcasConstants InConstants,
                                ID3D11Texture2D* OutResource);
-    bool DispatchLCDepthAdaptive(ID3D11Device* InDevice, ID3D11DeviceContext* InContext, ID3D11Texture2D* InResource,
+    bool DispatchDASDepthAdaptive(ID3D11Device* InDevice, ID3D11DeviceContext* InContext, ID3D11Texture2D* InResource,
                                  ID3D11Texture2D* InMotionVectors, ID3D11Texture2D* InDepth, RcasConstants InConstants,
                                  ID3D11Texture2D* OutResource);
 

@@ -3,8 +3,8 @@
 #include "RCAS_Dx12.h"
 
 #include "precompile/RCAS_Shader.h"
-#include "precompile/da_sharpen_Shader.h"
-#include "precompile/lc_da_sharpen_Shader.h"
+#include "precompile/da_das_sharpen_Shader.h"
+#include "precompile/da_rcas_sharpen_Shader.h"
 
 #include <Config.h>
 
@@ -278,10 +278,10 @@ bool RCAS_Dx12::DispatchDepthAdaptive(ID3D12Device* InDevice, ID3D12GraphicsComm
     return true;
 }
 
-bool RCAS_Dx12::DispatchLCDepthAdaptive(ID3D12Device* InDevice, ID3D12GraphicsCommandList* InCmdList,
-                                        ID3D12Resource* InResource, ID3D12Resource* InMotionVectors,
-                                        ID3D12Resource* InDepth, RcasConstants InConstants, ID3D12Resource* OutResource,
-                                        FrameDescriptorHeap& currentHeap)
+bool RCAS_Dx12::DispatchDASDepthAdaptive(ID3D12Device* InDevice, ID3D12GraphicsCommandList* InCmdList,
+                                         ID3D12Resource* InResource, ID3D12Resource* InMotionVectors,
+                                         ID3D12Resource* InDepth, RcasConstants InConstants,
+                                         ID3D12Resource* OutResource, FrameDescriptorHeap& currentHeap)
 {
     if (InDepth == nullptr || _pipelineStateLCDA == nullptr)
         return false;
@@ -399,15 +399,16 @@ bool RCAS_Dx12::Dispatch(ID3D12Device* InDevice, ID3D12GraphicsCommandList* InCm
     FrameDescriptorHeap& currentHeap = _frameHeaps[_counter];
 
     const bool useDepthAdaptive = Config::Instance()->UseDepthAwareSharpen.value_or_default() && InDepth != nullptr;
-    const bool useLCDepthAdaptive = Config::Instance()->UseLCDepthAwareSharpen.value_or_default() && InDepth != nullptr;
+    const bool useDASDepthAdaptive =
+        Config::Instance()->UseDASDepthAwareSharpen.value_or_default() && InDepth != nullptr;
 
     if (useDepthAdaptive)
         return DispatchDepthAdaptive(InDevice, InCmdList, InResource, InMotionVectors, InDepth, InConstants,
                                      OutResource, currentHeap);
 
-    if (useLCDepthAdaptive)
-        return DispatchLCDepthAdaptive(InDevice, InCmdList, InResource, InMotionVectors, InDepth, InConstants,
-                                       OutResource, currentHeap);
+    if (useDASDepthAdaptive)
+        return DispatchDASDepthAdaptive(InDevice, InCmdList, InResource, InMotionVectors, InDepth, InConstants,
+                                        OutResource, currentHeap);
 
     return DispatchRCAS(InDevice, InCmdList, InResource, InMotionVectors, InConstants, OutResource, currentHeap);
 }
@@ -499,12 +500,12 @@ RCAS_Dx12::RCAS_Dx12(std::string InName, ID3D12Device* InDevice) : Shader_Dx12(I
         if (!CreatePipelineState(InDevice, reinterpret_cast<const void*>(rcas_cso), sizeof(rcas_cso), &_pipelineState))
             return;
 
-        if (!CreatePipelineState(InDevice, reinterpret_cast<const void*>(da_sharpen_cso), sizeof(da_sharpen_cso),
-                                 &_pipelineStateDA))
+        if (!CreatePipelineState(InDevice, reinterpret_cast<const void*>(da_rcas_sharpen_cso),
+                                 sizeof(da_rcas_sharpen_cso), &_pipelineStateDA))
             return;
 
-        if (!CreatePipelineState(InDevice, reinterpret_cast<const void*>(lc_da_sharpen_cso), sizeof(lc_da_sharpen_cso),
-                                 &_pipelineStateLCDA))
+        if (!CreatePipelineState(InDevice, reinterpret_cast<const void*>(da_das_sharpen_cso),
+                                 sizeof(da_das_sharpen_cso), &_pipelineStateLCDA))
             return;
     }
     else
@@ -516,19 +517,19 @@ RCAS_Dx12::RCAS_Dx12(std::string InName, ID3D12Device* InDevice) : Shader_Dx12(I
             return;
         }
 
-        if (!CreatePipelineState(
-                InDevice, daSharpenCode, &_pipelineStateDA,
-                CD3DX12_SHADER_BYTECODE(reinterpret_cast<const void*>(da_sharpen_cso), sizeof(da_sharpen_cso))))
+        if (!CreatePipelineState(InDevice, daSharpenCode, &_pipelineStateDA,
+                                 CD3DX12_SHADER_BYTECODE(reinterpret_cast<const void*>(da_rcas_sharpen_cso),
+                                                         sizeof(da_rcas_sharpen_cso))))
         {
             LOG_ERROR("[{0}] CreateComputeShader error for depth aware shader!", _name);
             return;
         }
 
         if (!CreatePipelineState(
-                InDevice, lcDASharpenCode, &_pipelineStateLCDA,
-                CD3DX12_SHADER_BYTECODE(reinterpret_cast<const void*>(lc_da_sharpen_cso), sizeof(lc_da_sharpen_cso))))
+                InDevice, dasDASharpenCode, &_pipelineStateLCDA,
+                CD3DX12_SHADER_BYTECODE(reinterpret_cast<const void*>(da_das_sharpen_cso), sizeof(da_das_sharpen_cso))))
         {
-            LOG_ERROR("[{0}] CreateComputeShader error for LC depth aware shader!", _name);
+            LOG_ERROR("[{0}] CreateComputeShader error for DAS depth aware shader!", _name);
             return;
         }
     }

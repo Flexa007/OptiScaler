@@ -5050,13 +5050,13 @@ bool MenuCommon::RenderMenu()
                         ImGui::BeginDisabled(!config->RcasEnabled.value_or(rcasEnabled));
 
                         bool useDA = Config::Instance()->UseDepthAwareSharpen.value_or_default();
-                        bool useLCDA = Config::Instance()->UseLCDepthAwareSharpen.value_or_default();
+                        bool useLCDA = Config::Instance()->UseDASDepthAwareSharpen.value_or_default();
                         bool useRcas = !useDA && !useLCDA;
 
                         if (ImGui::Checkbox("RCAS", &useRcas) && useRcas)
                         {
                             Config::Instance()->UseDepthAwareSharpen = !useRcas;
-                            Config::Instance()->UseLCDepthAwareSharpen = !useRcas;
+                            Config::Instance()->UseDASDepthAwareSharpen = !useRcas;
                         }
 
                         ShowHelpMarker("Use AMD's RCAS\n"
@@ -5068,7 +5068,7 @@ bool MenuCommon::RenderMenu()
                         if (ImGui::Checkbox("Depth Aware (RCAS)", &useDA) && useDA)
                         {
                             Config::Instance()->UseDepthAwareSharpen = useDA;
-                            Config::Instance()->UseLCDepthAwareSharpen = !useDA;
+                            Config::Instance()->UseDASDepthAwareSharpen = !useDA;
                         }
 
                         ShowHelpMarker("Use Depth Aware Sharpening (RCAS)\n"
@@ -5079,14 +5079,14 @@ bool MenuCommon::RenderMenu()
 
                         ImGui::SameLine(0.0f, 6.0f);
 
-                        if (ImGui::Checkbox("Depth Aware (LC)", &useLCDA) && useLCDA)
+                        if (ImGui::Checkbox("Depth Aware (DAS)", &useLCDA) && useLCDA)
                         {
-                            Config::Instance()->UseLCDepthAwareSharpen = useLCDA;
+                            Config::Instance()->UseDASDepthAwareSharpen = useLCDA;
                             Config::Instance()->UseDepthAwareSharpen = !useLCDA;
                         }
 
-                        ShowHelpMarker("Use Depth Aware Sharpening (LC)\n"
-                                       "Local contrast based sharpening\n"
+                        ShowHelpMarker("Use Depth Aware Sharpening (DAS)\n"
+                                       "Depth-aware directional adaptive luma sharpener\n"
                                        "Smarter sharpening with less artifacts,\n"
                                        "but also heavier\n\n"
                                        "The farther away is the object, the more\n"

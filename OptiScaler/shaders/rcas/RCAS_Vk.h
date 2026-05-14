@@ -112,16 +112,16 @@ class RCAS_Vk : public Shader_Vk
 
     void CreateDescriptorSetLayout();
     void CreateDescriptorSetLayoutDA();
-    void CreateDescriptorSetLayoutLCDA();
+    void CreateDescriptorSetLayoutDASDA();
     void CreateDescriptorPool();
     void CreateDescriptorPoolDA();
-    void CreateDescriptorPoolLCDA();
+    void CreateDescriptorPoolDASDA();
     void CreateDescriptorSets();
     void CreateDescriptorSetsDA();
-    void CreateDescriptorSetsLCDA();
+    void CreateDescriptorSetsDASDA();
     void CreateConstantBuffer();
     void CreateConstantBufferDA();
-    void CreateConstantBufferLCDA();
+    void CreateConstantBufferDASDA();
     void UpdateDescriptorSet(VkCommandBuffer cmdList, int setIndex, VkImageView inputView, VkImageView motionView,
                              VkImageView outputView);
     void UpdateDescriptorSetDA(VkCommandBuffer cmdList, int setIndex, VkImageView inputView, VkImageView motionView,
@@ -136,7 +136,7 @@ class RCAS_Vk : public Shader_Vk
     bool DispatchDepthAdaptive(VkDevice InDevice, VkCommandBuffer InCmdList, RcasConstants InConstants,
                                VkImageView InResourceView, VkImageView InMotionVectorsView, VkImageView OutResourceView,
                                VkExtent2D OutExtent, VkImageView InDepthView);
-    bool DispatchLCDepthAdaptive(VkDevice InDevice, VkCommandBuffer InCmdList, RcasConstants InConstants,
+    bool DispatchDASDepthAdaptive(VkDevice InDevice, VkCommandBuffer InCmdList, RcasConstants InConstants,
                                  VkImageView InResourceView, VkImageView InMotionVectorsView,
                                  VkImageView OutResourceView, VkExtent2D OutExtent, VkImageView InDepthView);
 
@@ -150,7 +150,7 @@ class RCAS_Vk : public Shader_Vk
     VkPipeline _pipelineDA = VK_NULL_HANDLE;
     VkPipelineLayout _pipelineLayoutDA = VK_NULL_HANDLE;
     VkDescriptorSetLayout _descriptorSetLayoutDA = VK_NULL_HANDLE;
-    VkPipeline _pipelineLCDA = VK_NULL_HANDLE;
-    VkPipelineLayout _pipelineLayoutLCDA = VK_NULL_HANDLE;
+    VkPipeline _pipelineDASDA = VK_NULL_HANDLE;
+    VkPipelineLayout _pipelineLayoutDASDA = VK_NULL_HANDLE;
     VkDescriptorSetLayout _descriptorSetLayoutLCDA = VK_NULL_HANDLE;
 };
