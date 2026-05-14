@@ -233,6 +233,21 @@ HANDLE WINAPI KernelHooks::hk_K32_CreateFileW(LPCWSTR lpFileName, DWORD dwDesire
                              dwFlagsAndAttributes, hTemplateFile);
 }
 
+VALIDATE_HOOK(hk_K32_OutputDebugStringW, Kernel32Proxy::PFN_OutputDebugStringW)
+VOID WINAPI KernelHooks::hk_K32_OutputDebugStringW(LPCWSTR lpOutputString)
+{
+    o_K32_OutputDebugStringW(lpOutputString);
+
+    std::wstring result(lpOutputString);
+
+    while (!result.empty() && (result.back() == L'\n' || result.back() == L'\r'))
+    {
+        result.pop_back();
+    }
+
+    LOG_TRACE(L"{}", result);
+}
+
 // Load Library checks
 
 VALIDATE_HOOK(hk_K32_LoadLibraryW, Kernel32Proxy::PFN_LoadLibraryW)

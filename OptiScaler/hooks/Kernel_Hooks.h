@@ -8,6 +8,8 @@
 // which might create issues, not tested very well
 // #define HOOK_GET_MODULE
 
+// #define HOOK_OUTPUT_DEBUG
+
 #ifdef HOOK_GET_MODULE
 // Handle nvngx.dll calls on GetModule handle
 // #define GET_MODULE_NVNGX
@@ -29,6 +31,7 @@ class KernelHooks
     inline static Kernel32Proxy::PFN_GetModuleHandleExW o_K32_GetModuleHandleExW = nullptr;
     inline static Kernel32Proxy::PFN_GetFileAttributesW o_K32_GetFileAttributesW = nullptr;
     inline static Kernel32Proxy::PFN_CreateFileW o_K32_CreateFileW = nullptr;
+    inline static Kernel32Proxy::PFN_OutputDebugStringW o_K32_OutputDebugStringW = nullptr;
 
     inline static KernelBaseProxy::PFN_FreeLibrary o_KB_FreeLibrary = nullptr;
     inline static KernelBaseProxy::PFN_LoadLibraryA o_KB_LoadLibraryA = nullptr;
@@ -47,6 +50,7 @@ class KernelHooks
     static HANDLE WINAPI hk_K32_CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
                                             LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition,
                                             DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
+    static VOID WINAPI hk_K32_OutputDebugStringW(LPCWSTR lpOutputString);
 
     static HMODULE hk_K32_LoadLibraryW(LPCWSTR lpLibFileName);
     static HMODULE hk_K32_LoadLibraryA(LPCSTR lpLibFileName);
@@ -73,6 +77,10 @@ class KernelHooks
         o_K32_GetModuleHandleExW = Kernel32Proxy::Hook_GetModuleHandleExW(hk_K32_GetModuleHandleExW);
         o_K32_GetFileAttributesW = Kernel32Proxy::Hook_GetFileAttributesW(hk_K32_GetFileAttributesW);
         o_K32_CreateFileW = Kernel32Proxy::Hook_CreateFileW(hk_K32_CreateFileW);
+
+#ifdef HOOK_OUTPUT_DEBUG
+        o_K32_OutputDebugStringW = Kernel32Proxy::Hook_OutputDebugStringW(hk_K32_OutputDebugStringW);
+#endif
 
         if (!Config::Instance()->UseNtdllHooks.value_or_default())
         {
