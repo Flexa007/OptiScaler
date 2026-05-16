@@ -1,3 +1,8 @@
+#pragma once
+
+#include "SysUtils.h"
+
+static std::string dasDASharpenCode = R"(
 #ifdef VK_MODE
 cbuffer Params : register(b0, space0)
 #else
@@ -368,8 +373,8 @@ float3 ApplyDirectionalSharpen(float3 centerColor, float3 upColor, float3 leftCo
 
     static const float kDirectionHaloSuppression = 0.35;
 
-    hDiff *= lerp(1.0, 1.0 - kDirectionHaloSuppression, haloRiskH);
-    vDiff *= lerp(1.0, 1.0 - kDirectionHaloSuppression, haloRiskV);
+    hDiff  *= lerp(1.0, 1.0 - kDirectionHaloSuppression, haloRiskH);
+    vDiff  *= lerp(1.0, 1.0 - kDirectionHaloSuppression, haloRiskV);
     daDiff *= lerp(1.0, 1.0 - kDirectionHaloSuppression, haloRiskDA);
     dbDiff *= lerp(1.0, 1.0 - kDirectionHaloSuppression, haloRiskDB);
 
@@ -464,7 +469,7 @@ float3 ApplyDirectionalSharpen(float3 centerColor, float3 upColor, float3 leftCo
 
     float unstablePattern = (1.0 - rawDirectionConfidence) * smoothstep(0.08, 0.35, relativeRange) * (1.0 - aaRampMask);
 
-    float strength = finalSharpness * 2.35 * directionConfidence * rangeConfidence * edgeConfidence *
+    float strength = finalSharpness * 2.35 * directionConfidence * rangeConfidence * edgeConfidence * 
                      aaStrengthDamp * ambiguityDamp * lerp(1.0, 0.78, unstablePattern);
 
     float edgeBlock = max(aaRampMask, maxHaloRisk);
@@ -490,7 +495,7 @@ float3 ApplyDirectionalSharpen(float3 centerColor, float3 upColor, float3 leftCo
     float lowContrastTexture = smoothstep(0.004, 0.045, relativeRange) * (1.0 - smoothstep(0.14, 0.40, relativeRange));
     float lowContrastIsoBoost = lerp(1.0, 1.50, lowContrastTexture);
 
-    newY += cY * shapedIso * isoGain * finalSharpness * 0.18 * isoBoost * lowContrastIsoBoost *
+    newY += cY * shapedIso * isoGain * finalSharpness * 0.18 * isoBoost * lowContrastIsoBoost * 
             nonDirectionalMask * safeTextureMask * lerp(1.0, 0.45, unstablePattern);
 
     // -------------------------------------------------------------------------
@@ -513,7 +518,8 @@ float3 ApplyDirectionalSharpen(float3 centerColor, float3 upColor, float3 leftCo
 
     return max(outNorm * localScale, 0.0);
 }
-
+)"
+                                      R"(
 // -----------------------------------------------------------------------------
 // Main
 // -----------------------------------------------------------------------------
@@ -714,3 +720,4 @@ void CSMain(uint3 DTid : SV_DispatchThreadID,
 
     Dest[p] = float4(output, 1.0);
 }
+)";
