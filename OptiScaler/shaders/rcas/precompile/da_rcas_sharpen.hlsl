@@ -279,7 +279,7 @@ float ComputeEdgeFactorFromTaps(
 
     // Luma is confirmation, not an edge source.
     // Even without luma confirmation, keep some depth protection.
-    float depthTrust = lerp(0.15, 1.0, lumaConfirm);
+    float depthTrust = lerp(0.40, 1.0, lumaConfirm);
 
     return lerp(1.0, depthEdge, depthTrust);
 }

@@ -527,7 +527,7 @@ RCAS_Dx11::RCAS_Dx11(std::string InName, ID3D11Device* InDevice) : _name(InName)
             return;
         }
 
-        shaderBlob = RCAS_CompileShader(daSharpenCode.c_str(), "CSMain", "cs_5_0");
+        shaderBlob = RCAS_CompileShader(daRcasSharpenCode.c_str(), "CSMain", "cs_5_0");
 
         if (shaderBlob != nullptr)
         {

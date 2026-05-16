@@ -517,7 +517,7 @@ RCAS_Dx12::RCAS_Dx12(std::string InName, ID3D12Device* InDevice) : Shader_Dx12(I
             return;
         }
 
-        if (!CreatePipelineState(InDevice, daSharpenCode, &_pipelineStateDA,
+        if (!CreatePipelineState(InDevice, daRcasSharpenCode, &_pipelineStateDA,
                                  CD3DX12_SHADER_BYTECODE(reinterpret_cast<const void*>(da_rcas_sharpen_cso),
                                                          sizeof(da_rcas_sharpen_cso))))
         {

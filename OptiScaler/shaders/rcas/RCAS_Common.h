@@ -15,7 +15,7 @@ struct RcasConstants
     float CameraFar;
 };
 
-static std::string daSharpenCode = R"(
+static std::string daRcasSharpenCode = R"(
 #ifdef VK_MODE
 cbuffer Params : register(b0, space0)
 #else
@@ -178,7 +178,7 @@ float2 EstimateDepthGradientFromTaps(
     float gx = abs(gxF) < abs(gxB) ? gxF : gxB;
     float gy = abs(gyF) < abs(gyB) ? gyF : gyB;
 
-    float maxGrad = abs(centerDepth) * 0.05;
+    float maxGrad = max(abs(centerDepth) * 0.05, 1e-4);
     return clamp(float2(gx, gy), -maxGrad, maxGrad);
 }
 
@@ -234,14 +234,8 @@ float ComputeAdaptiveSharpness(int2 pixelCoord)
     return clamp(setSharpness, 0.0, 2.0);
 }
 
-float3 ApplyDebugTint(
-    float3 color,
-    float baseSharpness,
-    float adaptiveSharpness,
-    float edgeSharpness,
-    float finalSharpness,
-    float distanceBoost,
-    int debugMode)
+float3 ApplyDebugTint(float3 color, float baseSharpness, float adaptiveSharpness, float edgeSharpness,
+                      float finalSharpness, float distanceBoost, int debugMode)
 {
     float motionBoost = max(adaptiveSharpness - baseSharpness, 0.0);
     float motionReduce = max(baseSharpness - adaptiveSharpness, 0.0);
@@ -263,18 +257,9 @@ float3 ApplyDebugTint(
     return color;
 }
 
-float ComputeEdgeFactorFromTaps(
-    float centerLuma,
-    float centerDepth,
-    float2 depthGrad,
-    float lumaUp,
-    float lumaLeft,
-    float lumaRight,
-    float lumaDown,
-    float depthUp,
-    float depthLeft,
-    float depthRight,
-    float depthDown)
+float ComputeEdgeFactorFromTaps(float centerLuma, float centerDepth, float2 depthGrad, 
+                                float lumaUp, float lumaLeft, float lumaRight, float lumaDown,
+                                float depthUp, float depthLeft, float depthRight, float depthDown)
 {
     float lumaSum = 0.0;
     lumaSum += abs(lumaUp - centerLuma);
@@ -297,7 +282,7 @@ float ComputeEdgeFactorFromTaps(
 
     // Luma is confirmation, not an edge source.
     // Even without luma confirmation, keep some depth protection.
-    float depthTrust = lerp(0.15, 1.0, lumaConfirm);
+    float depthTrust = lerp(0.40, 1.0, lumaConfirm);
 
     return lerp(1.0, depthEdge, depthTrust);
 }
@@ -621,8 +606,6 @@ float LinearizeDepth(float rawDepth)
 
 float SafeLoadDepthLinearFromDepthCoord(int2 depthCoord)
 {
-    float2 df = (float2(pixelCoord) + 0.5) * DepthTextureScale;
-    int2 depthCoord = int2(df);
     return LinearizeDepth(SafeLoadRawDepthAtCoord(depthCoord));
 }
 
@@ -716,7 +699,7 @@ float ComputeAdaptiveSharpness(int2 pixelCoord)
         }
 
         float motion = max(abs(mv.x * MvScaleX), abs(mv.y * MvScaleY));
-
+        
         float denom = max(MotionScaleLimit - MotionThreshold, 0.05);
 
         float add = (max(motion - MotionThreshold, 0.0) / denom) * MotionSharpness;
@@ -777,7 +760,7 @@ float3 ApplyLumaRatio(float3 color, float oldY, float newY)
 }
 )"
                                       R"(
-// -----------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------
 // Directional adaptive sharpen core
 // -----------------------------------------------------------------------------
 
@@ -795,9 +778,6 @@ float3 ApplyDirectionalSharpen(float3 centerColor, float3 upColor, float3 leftCo
     localScale = max(localScale, Max3(upRightColor));
     localScale = max(localScale, Max3(downLeftColor));
     localScale = max(localScale, Max3(downRightColor));
-
-    // Important: do not force localScale to >= 1.0.
-    // This keeps the kernel exposure/local-range adaptive in SDR, HDR, and dark pre-tonemap areas.
     localScale = max(localScale, 1e-4);
 
     float3 c = max(centerColor / localScale, 0.0);
@@ -822,7 +802,6 @@ float3 ApplyDirectionalSharpen(float3 centerColor, float3 upColor, float3 leftCo
     float dlY = max(Luma(dl), 1e-6);
     float drY = max(Luma(dr), 1e-6);
 
-    // True 3x3 local range, matching the directional kernel and limiter.
     float minY = min(cY, min(min(uY, dY), min(lY, rY)));
     minY = min(minY, min(min(ulY, urY), min(dlY, drY)));
 
@@ -920,13 +899,9 @@ float3 ApplyDirectionalSharpen(float3 centerColor, float3 upColor, float3 leftCo
     float absDetail = abs(detail);
     float shapedDetail = sign(detail) * max(absDetail - 0.0010, 0.0);
 
-    // Soft compression.
     shapedDetail = shapedDetail / (1.0 + 1.45 * abs(shapedDetail));
-
-    // Tuned slightly stronger than previous version.
     shapedDetail = clamp(shapedDetail, -0.42, 0.42);
 
-    // 3x3 range confidence. Since this now includes diagonals, it does not miss diagonal detail.
     float rangeConfidence = lerp(0.72, 1.0, smoothstep(0.0004, 0.018, relativeRange));
     float edgeConfidence = lerp(0.18, 1.0, edgeFactor);
 
@@ -1119,7 +1094,6 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
     float edgeFactor = ComputeEdgeFactorFromCrossWeights(centerLuma, lumaUp, lumaLeft, lumaRight, lumaDown,
                                                          wUp, wLeft, wRight, wDown);
 
-    // Tuned edge reduction.
     float edgeSharpness = adaptiveSharpness * lerp(0.10, 1.0, edgeFactor);
 
     float distanceBoost = DistanceSharpnessBoost(centerDepth);
