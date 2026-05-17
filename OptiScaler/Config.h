@@ -312,6 +312,7 @@ class Config
     CustomOptional<float> MenuBGColorR { 0.0f };
     CustomOptional<float> MenuBGColorG { 0.0f };
     CustomOptional<float> MenuBGColorB { 0.0f };
+    CustomOptional<float> MenuBGColorA { 0.99f };
 
     // Hooks
     CustomOptional<bool> HookOriginalNvngxOnly { false };

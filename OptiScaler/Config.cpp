@@ -432,6 +432,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             MenuBGColorR.set_from_config(readFloat("Menu", "BGColorR"));
             MenuBGColorG.set_from_config(readFloat("Menu", "BGColorG"));
             MenuBGColorB.set_from_config(readFloat("Menu", "BGColorB"));
+            MenuBGColorA.set_from_config(readFloat("Menu", "BGColorA"));
         }
 
         // Hooks
@@ -1106,6 +1107,7 @@ bool Config::SaveIni()
         ini.SetValue("Menu", "BGColorR", GetFloatValue(Instance()->MenuBGColorR.value_for_config()).c_str());
         ini.SetValue("Menu", "BGColorG", GetFloatValue(Instance()->MenuBGColorG.value_for_config()).c_str());
         ini.SetValue("Menu", "BGColorB", GetFloatValue(Instance()->MenuBGColorB.value_for_config()).c_str());
+        ini.SetValue("Menu", "BGColorA", GetFloatValue(Instance()->MenuBGColorA.value_for_config()).c_str());
     }
 
     // Hooks
