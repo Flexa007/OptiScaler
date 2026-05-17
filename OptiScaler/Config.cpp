@@ -1100,15 +1100,12 @@ bool Config::SaveIni()
                      wstring_to_string(Instance()->TTFFontPath.value_for_config_or(L"auto")).c_str());
 
         ini.SetValue("Menu", "LightTheme", GetBoolValue(Instance()->LightTheme.value_for_config()).c_str());
-        ini.SetValue("Menu", "MenuAccentColorR",
-                     GetFloatValue(Instance()->MenuAccentColorR.value_for_config()).c_str());
-        ini.SetValue("Menu", "MenuAccentColorG",
-                     GetFloatValue(Instance()->MenuAccentColorG.value_for_config()).c_str());
-        ini.SetValue("Menu", "MenuAccentColorB",
-                     GetFloatValue(Instance()->MenuAccentColorB.value_for_config()).c_str());
-        ini.SetValue("Menu", "MenuBGColorR", GetFloatValue(Instance()->MenuBGColorR.value_for_config()).c_str());
-        ini.SetValue("Menu", "MenuBGColorG", GetFloatValue(Instance()->MenuBGColorG.value_for_config()).c_str());
-        ini.SetValue("Menu", "MenuBGColorB", GetFloatValue(Instance()->MenuBGColorB.value_for_config()).c_str());
+        ini.SetValue("Menu", "AccentColorR", GetFloatValue(Instance()->MenuAccentColorR.value_for_config()).c_str());
+        ini.SetValue("Menu", "AccentColorG", GetFloatValue(Instance()->MenuAccentColorG.value_for_config()).c_str());
+        ini.SetValue("Menu", "AccentColorB", GetFloatValue(Instance()->MenuAccentColorB.value_for_config()).c_str());
+        ini.SetValue("Menu", "BGColorR", GetFloatValue(Instance()->MenuBGColorR.value_for_config()).c_str());
+        ini.SetValue("Menu", "BGColorG", GetFloatValue(Instance()->MenuBGColorG.value_for_config()).c_str());
+        ini.SetValue("Menu", "BGColorB", GetFloatValue(Instance()->MenuBGColorB.value_for_config()).c_str());
     }
 
     // Hooks
