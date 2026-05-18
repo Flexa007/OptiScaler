@@ -122,7 +122,7 @@ static bool IsRunningOnWine()
     return false;
 }
 
-UINT customD3D12SDKVersion = 615;
+UINT customD3D12SDKVersion = 611;
 
 static void RunAgilityUpgrade(HMODULE dx12Module)
 {
