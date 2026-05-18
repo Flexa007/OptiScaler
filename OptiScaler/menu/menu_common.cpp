@@ -1815,6 +1815,9 @@ static void ApplyThemeStyle()
     c[ImGuiCol_NavWindowingHighlight] = AccentStrong(0.70f);
     c[ImGuiCol_NavWindowingDimBg] = dimBg;
     c[ImGuiCol_ModalWindowDimBg] = modalDimBg;
+
+    _hdrTonemapApplied = false;
+    MenuHdrCheck(ImGui::GetIO());
 }
 
 static double lastTime = 0.0;
