@@ -931,11 +931,12 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
 
     // Run upscaler
     {
+        // Resource tracking
+        UpscalerInputsDx12::UpscaleEnd(InCmdList, InParameters, deviceContext->feature.get());
+
         ScopedSkipHeapCapture skipHeapCapture {};
         evalResult = deviceContext->feature->Evaluate(InCmdList, InParameters);
     }
-
-    NVSDK_NGX_Result methodResult = evalResult ? NVSDK_NGX_Result_Success : NVSDK_NGX_Result_Fail;
 
     if (evalResult)
     {
@@ -943,10 +944,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
         // Record the second timestamp
         if (State::Instance().workingMode != WorkingMode::Nvngx)
             UpscalerTimeDx12::UpscaleEnd(InCmdList);
-
-        // FG Dispatch
-        UpscalerInputsDx12::UpscaleEnd(InCmdList, InParameters, deviceContext->feature.get());
     }
+
+    NVSDK_NGX_Result methodResult = evalResult ? NVSDK_NGX_Result_Success : NVSDK_NGX_Result_Fail;
 
     // Root signature restore
     if (Config::Instance()->RestoreComputeSignature.value_or_default() ||
