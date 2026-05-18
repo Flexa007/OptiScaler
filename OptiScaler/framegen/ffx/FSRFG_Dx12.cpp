@@ -621,20 +621,20 @@ ffxReturnCode_t FSRFG_Dx12::DispatchCallback(ffxDispatchDescFrameGeneration* par
     auto lhFormat = _lastHudlessFormat;
     auto uhFormat = _usingHudlessFormat;
 
-    if (_lastHudlessFormat != FFX_API_SURFACE_FORMAT_UNKNOWN && lhFormat != scFormat &&
-        (_usingHudlessFormat == FFX_API_SURFACE_FORMAT_UNKNOWN || uhFormat != lhFormat))
-    {
-        LOG_DEBUG("Hudless format doesn't match, hudless: {}, present: {}", (uint32_t) _lastHudlessFormat,
-                  params->presentColor.description.format);
+    // if (_lastHudlessFormat != FFX_API_SURFACE_FORMAT_UNKNOWN && lhFormat != scFormat &&
+    //     (_usingHudlessFormat == FFX_API_SURFACE_FORMAT_UNKNOWN || uhFormat != lhFormat))
+    //{
+    //     LOG_DEBUG("Hudless format doesn't match, hudless: {}, present: {}", (uint32_t) _lastHudlessFormat,
+    //               params->presentColor.description.format);
 
-        params->numGeneratedFrames = 0;
-        _lastFrameId = params->frameID;
+    //    params->numGeneratedFrames = 0;
+    //    _lastFrameId = params->frameID;
 
-        state.FGchanged = true;
-        state.SCchanged = true;
+    //    state.FGchanged = true;
+    //    state.SCchanged = true;
 
-        return FFX_API_RETURN_OK;
-    }
+    //    return FFX_API_RETURN_OK;
+    //}
 
     static bool lastFGDisableHudless = Config::Instance()->FGDisableHudless.value_or_default();
     if (lastFGDisableHudless != Config::Instance()->FGDisableHudless.value_or_default())
