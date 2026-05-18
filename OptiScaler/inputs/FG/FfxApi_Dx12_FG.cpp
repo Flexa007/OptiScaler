@@ -213,7 +213,7 @@ static bool CreateBufferResource(ID3D12Device* InDevice, ID3D12Resource* InResou
     }
 
     LOG_DEBUG("Created new one: {}x{}", inDesc.Width, inDesc.Height);
-    return false;
+    return true;
 }
 
 static void ResourceBarrier(ID3D12GraphicsCommandList* InCommandList, ID3D12Resource* InResource,
