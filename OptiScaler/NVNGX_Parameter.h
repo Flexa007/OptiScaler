@@ -414,6 +414,7 @@ inline static void InitNGXParameters(NVSDK_NGX_Parameter* InParams)
     InParams->Set(NVSDK_NGX_Parameter_SuperSampling_Available, 1);
 
     if (State::Instance().NVNGX_Engine == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
+        State::Instance().GameEngine == GameEngineType::Unreal ||
         State::Instance().gameQuirks & GameQuirk::ForceUnrealEngine)
     {
         InParams->Set(NVSDK_NGX_Parameter_SuperSampling_MinDriverVersionMajor, 10);
@@ -488,6 +489,7 @@ inline static void InitNGXParameters(NVSDK_NGX_Parameter* InParams)
         InParams->Set("SuperSamplingDenoising.NeedsUpdatedDriver", 0);
 
         if (State::Instance().NVNGX_Engine == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
+            State::Instance().GameEngine == GameEngineType::Unreal ||
             State::Instance().gameQuirks & GameQuirk::ForceUnrealEngine)
         {
             InParams->Set("SuperSamplingDenoising.MinDriverVersionMajor", 10);
@@ -515,6 +517,7 @@ inline static void InitNGXParameters(NVSDK_NGX_Parameter* InParams)
         InParams->Set("DLSSG.MultiFrameCountMax", 1);
 
         if (State::Instance().NVNGX_Engine == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
+            State::Instance().GameEngine == GameEngineType::Unreal ||
             State::Instance().gameQuirks & GameQuirk::ForceUnrealEngine)
         {
             InParams->Set(NVSDK_NGX_Parameter_FrameInterpolation_MinDriverVersionMajor, 10);

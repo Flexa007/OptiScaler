@@ -80,6 +80,7 @@ bool IFeature::SetInitParameters(NVSDK_NGX_Parameter* InParameters)
             _initFlags.AutoExposure = Config::Instance()->AutoExposure.value();
         }
         else if ((State::Instance().NVNGX_Engine == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
+                  State::Instance().GameEngine == GameEngineType::Unreal ||
                   State::Instance().gameQuirks & GameQuirk::ForceUnrealEngine) &&
                  Name()[0] == 'X')
         {
