@@ -1738,6 +1738,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     HMODULE handle = nullptr;
     OSVERSIONINFOW winVer { 0 };
     auto exePath = Util::ExePath().remove_filename();
+    std::filesystem::path optiDllPath;
 
     switch (ul_reason_for_call)
     {
@@ -1848,9 +1849,33 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 
         spdlog::info("");
         spdlog::info("Check for DLSS files");
-        State::Instance().NVNGX_DLSS_Path = Util::FindFilePath(exePath, "nvngx_dlss.dll");
-        State::Instance().NVNGX_DLSSD_Path = Util::FindFilePath(exePath, "nvngx_dlssd.dll");
-        State::Instance().NVNGX_DLSSG_Path = Util::FindFilePath(exePath, "nvngx_dlssg.dll");
+
+        optiDllPath = std::filesystem::path(Config::Instance()->MainDllPath.value());
+
+        if (Config::Instance()->NVNGX_DLSS_Library.has_value())
+        {
+            std::filesystem::path dlssPath(Config::Instance()->NVNGX_DLSS_Library.value());
+
+            if (std::filesystem::is_directory(dlssPath) && std::filesystem::exists(dlssPath))
+            {
+                State::Instance().NVNGX_DLSS_Path = dlssPath;
+                LOG_DEBUG("nvngx_dlss.dll found at {}", dlssPath.string());
+            }
+        }
+
+        if (!State::Instance().NVNGX_DLSS_Path.has_value())
+            State::Instance().NVNGX_DLSS_Path = Util::FindFilePath(optiDllPath, "nvngx_dlss.dll");
+
+        if (!State::Instance().NVNGX_DLSS_Path.has_value())
+            State::Instance().NVNGX_DLSS_Path = Util::FindFilePath(exePath, "nvngx_dlss.dll");
+
+        State::Instance().NVNGX_DLSSD_Path = Util::FindFilePath(optiDllPath, "nvngx_dlssd.dll");
+        if (!State::Instance().NVNGX_DLSSD_Path.has_value())
+            State::Instance().NVNGX_DLSSD_Path = Util::FindFilePath(exePath, "nvngx_dlssd.dll");
+
+        State::Instance().NVNGX_DLSSG_Path = Util::FindFilePath(optiDllPath, "nvngx_dlssg.dll");
+        if (!State::Instance().NVNGX_DLSSG_Path.has_value())
+            State::Instance().NVNGX_DLSSG_Path = Util::FindFilePath(exePath, "nvngx_dlssg.dll");
 
         // Check if real DLSS available
         if (Config::Instance()->DLSSEnabled.value_or_default())

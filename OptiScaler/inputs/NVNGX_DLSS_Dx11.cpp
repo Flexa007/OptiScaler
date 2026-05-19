@@ -41,12 +41,6 @@ static void UpdateInitPaths(NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 
     if (InFeatureInfo != nullptr)
     {
-        for (size_t i = 0; i < InFeatureInfo->PathListInfo.Length; i++)
-        {
-            const wchar_t* path = InFeatureInfo->PathListInfo.Path[i];
-            State::Instance().NVNGX_FeatureInfo_Paths.push_back(std::wstring(path));
-        }
-
         auto exePath = Util::ExePath().remove_filename();
 
         std::optional<std::filesystem::path> nvngxDlssPath = std::nullopt;
@@ -92,19 +86,37 @@ static void UpdateInitPaths(NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
                 nvngxDlssGPath = path.value();
         }
 
-        // Add found locations
-        State::Instance().NVNGX_FeatureInfo_Paths.push_back(exePath.wstring());
-        if (nvngxDlssPath.has_value())
+        // Override locations
+        if (Config::Instance()->DLSSFeaturePath.has_value())
+            State::Instance().NVNGX_FeatureInfo_Paths.push_back(Config::Instance()->DLSSFeaturePath.value());
+
+        // If DLSS path is overriden
+        if (Config::Instance()->NVNGX_DLSS_Library.has_value() && nvngxDlssPath.has_value())
             State::Instance().NVNGX_FeatureInfo_Paths.push_back(nvngxDlssPath.value().parent_path().wstring());
 
+        // OptiDll Path
+        State::Instance().NVNGX_FeatureInfo_Paths.push_back(Config::Instance()->MainDllPath.value());
+
+        // Original paths from NVNGX
+        for (size_t i = 0; i < InFeatureInfo->PathListInfo.Length; i++)
+        {
+            const wchar_t* path = InFeatureInfo->PathListInfo.Path[i];
+            State::Instance().NVNGX_FeatureInfo_Paths.push_back(std::wstring(path));
+        }
+
+        // Exe path
+        State::Instance().NVNGX_FeatureInfo_Paths.push_back(exePath.wstring());
+
+        // If DLSS path is not overriden
+        if (!Config::Instance()->NVNGX_DLSS_Library.has_value() && nvngxDlssPath.has_value())
+            State::Instance().NVNGX_FeatureInfo_Paths.push_back(nvngxDlssPath.value().parent_path().wstring());
+
+        // Add found locations
         if (nvngxDlssDPath.has_value())
             State::Instance().NVNGX_FeatureInfo_Paths.push_back(nvngxDlssDPath.value().parent_path().wstring());
 
         if (nvngxDlssGPath.has_value())
             State::Instance().NVNGX_FeatureInfo_Paths.push_back(nvngxDlssGPath.value().parent_path().wstring());
-
-        if (Config::Instance()->DLSSFeaturePath.has_value())
-            State::Instance().NVNGX_FeatureInfo_Paths.push_back(Config::Instance()->DLSSFeaturePath.value());
 
         // Build pointer array
         paths = new const wchar_t*[State::Instance().NVNGX_FeatureInfo_Paths.size()];
