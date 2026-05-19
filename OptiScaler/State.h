@@ -60,6 +60,14 @@ enum class WorkingMode : uint32_t
     Other,
 };
 
+enum class GameEngineType : uint32_t
+{
+    Unity,
+    Unreal,
+    Katana,
+    Other,
+};
+
 typedef struct CapturedHudlessInfo
 {
     UINT64 usageCount = 1;
@@ -76,8 +84,10 @@ class State
         return instance;
     }
 
-    std::string GameName;
     std::string GameExe;
+    std::string GameName;
+    std::string GameVersion;
+    GameEngineType GameEngine = GameEngineType::Other;
     ankerl::unordered_dense::map<void*, std::string> DeviceAdapterNames;
 
     bool NvngxDx11Inited = false;

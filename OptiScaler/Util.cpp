@@ -7,6 +7,7 @@
 #include <proxies/KernelBase_Proxy.h>
 
 #include <shlobj.h>
+#include <cwctype>
 
 typedef LONG(WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
 typedef decltype(&GetFileVersionInfoSizeW) PFN_GetFileVersionInfoSizeW;
@@ -113,10 +114,62 @@ std::string Util::GetWindowsName(const OSVERSIONINFOW& os)
     return "Unknown Windows Version";
 }
 
-std::wstring Util::GetExeProductName()
+static std::wstring ToLower(std::wstring value)
+{
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
+
+    return value;
+}
+
+static bool ContainsAny(const std::wstring& value, std::initializer_list<std::wstring_view> needles)
+{
+    for (auto needle : needles)
+    {
+        if (value.find(needle) != std::wstring::npos)
+            return true;
+    }
+
+    return false;
+}
+
+static bool HasUnrealBinariesParentStructure(const std::filesystem::path& exePath)
+{
+    auto platformDir = exePath.parent_path();
+
+    if (platformDir.empty())
+        return false;
+
+    auto binariesDir = platformDir.parent_path();
+
+    if (binariesDir.empty())
+        return false;
+
+    std::wstring binariesName = ToLower(binariesDir.filename().wstring());
+
+    bool isBinariesFolder = binariesName == L"binaries";
+
+    if (!isBinariesFolder)
+        return false;
+
+    std::wstring platformName = ToLower(platformDir.filename().wstring());
+
+    bool isWindowsPlatformFolder = platformName == L"win64" || platformName == L"win32" || platformName == L"wingdk" ||
+                                   platformName == L"windows" || platformName.starts_with(L"win");
+
+    return isBinariesFolder && isWindowsPlatformFolder;
+}
+
+void Util::GetExeInfo()
 {
     // In case of working ag version.dll
     // Loading original dll from system
+
+    auto exePath = Util::ExePath();
+    auto exeDir = exePath.parent_path();
+    auto exePathFilename = exePath.filename().string();
+    auto exePathFilenameW = exePath.filename().wstring();
+    State::Instance().GameExe = exePathFilename;
 
     wchar_t sysFolder[MAX_PATH];
     GetSystemDirectory(sysFolder, MAX_PATH);
@@ -125,23 +178,23 @@ std::wstring Util::GetExeProductName()
     auto dll = LoadLibraryExW((sysPath / L"version.dll").c_str(), NULL, 0);
 
     if (dll == nullptr)
-        return L"";
+        return;
 
     auto o_GetFileVersionInfoSizeW = (PFN_GetFileVersionInfoSizeW) GetProcAddress(dll, "GetFileVersionInfoSizeW");
     auto o_GetFileVersionInfoW = (PFN_GetFileVersionInfoW) GetProcAddress(dll, "GetFileVersionInfoW");
     auto o_VerQueryValueW = (PFN_VerQueryValueW) GetProcAddress(dll, "VerQueryValueW");
 
     if (o_GetFileVersionInfoSizeW == nullptr || o_GetFileVersionInfoW == nullptr || o_VerQueryValueW == nullptr)
-        return L"";
+        return;
 
     DWORD handle = 0;
     DWORD versionSize = o_GetFileVersionInfoSizeW(Util::ExePath().c_str(), &handle);
     if (versionSize == 0)
-        return L"";
+        return;
 
     std::vector<BYTE> versionData(versionSize);
     if (!o_GetFileVersionInfoW(Util::ExePath().c_str(), handle, versionSize, versionData.data()))
-        return L"";
+        return;
 
     struct LANGANDCODEPAGE
     {
@@ -151,17 +204,86 @@ std::wstring Util::GetExeProductName()
 
     UINT cbTranslate = 0;
     if (!o_VerQueryValueW(versionData.data(), L"\\VarFileInfo\\Translation", (LPVOID*) &lpTranslate, &cbTranslate))
-        return L"";
+        return;
 
-    std::wstring query = L"\\StringFileInfo\\" +
-                         std::format(L"{:04x}{:04x}", lpTranslate[0].wLanguage, lpTranslate[0].wCodePage) +
-                         L"\\ProductName";
-    LPWSTR productName = nullptr;
-    UINT size = 0;
-    if (o_VerQueryValueW(versionData.data(), query.c_str(), (LPVOID*) &productName, &size) && productName)
-        return productName;
+    auto QueryVersionString = [&](const wchar_t* name) -> std::wstring
+    {
+        std::wstring query = L"\\StringFileInfo\\" +
+                             std::format(L"{:04x}{:04x}", lpTranslate[0].wLanguage, lpTranslate[0].wCodePage) + L"\\" +
+                             name;
 
-    return L"";
+        LPWSTR value = nullptr;
+        UINT size = 0;
+
+        if (o_VerQueryValueW(versionData.data(), query.c_str(), reinterpret_cast<LPVOID*>(&value), &size) && value &&
+            size > 0)
+        {
+            return value;
+        }
+
+        return {};
+    };
+
+    std::wstring productName = QueryVersionString(L"ProductName");
+    std::wstring productVersion = QueryVersionString(L"ProductVersion");
+    std::wstring fileVersion = QueryVersionString(L"FileVersion");
+    std::wstring legalCopyright = QueryVersionString(L"LegalCopyright");
+    std::wstring companyName = QueryVersionString(L"CompanyName");
+    std::wstring fileDescription = QueryVersionString(L"FileDescription");
+
+    if (!productName.empty())
+    {
+        State::Instance().GameName = wstring_to_string(productName);
+    }
+
+    if (!productVersion.empty())
+    {
+        State::Instance().GameVersion = wstring_to_string(productVersion);
+    }
+    else if (!fileVersion.empty())
+    {
+        State::Instance().GameVersion = wstring_to_string(fileVersion);
+    }
+
+    std::wstring productLower = ToLower(productName);
+    std::wstring copyrightLower = ToLower(legalCopyright);
+    std::wstring companyLower = ToLower(companyName);
+    std::wstring descriptionLower = ToLower(fileDescription);
+    std::wstring exeLower = ToLower(exePathFilenameW);
+
+    bool hasUnityFiles =
+        std::filesystem::exists(exeDir / L"UnityPlayer.dll") || std::filesystem::exists(exeDir / L"GameAssembly.dll");
+
+    bool isUnity = hasUnityFiles || ContainsAny(productLower, { L"unity" }) ||
+                   ContainsAny(companyLower, { L"unity", L"unity technologies" }) ||
+                   ContainsAny(copyrightLower, { L"unity", L"unity technologies" }) ||
+                   ContainsAny(descriptionLower, { L"unity" });
+
+    if (isUnity)
+    {
+        State::Instance().GameEngine = GameEngineType::Unity;
+        return;
+    }
+
+    bool hasUnrealShippingExePattern =
+        exeLower.ends_with(L"-win64-shipping.exe") || exeLower.ends_with(L"-wingdk-shipping.exe") ||
+        exeLower.ends_with(L"-windows-shipping.exe") || exeLower.ends_with(L"-win64-test.exe") ||
+        exeLower.ends_with(L"-win64-debug.exe") || exeLower.ends_with(L"-windows-test.exe") ||
+        exeLower.ends_with(L"-windows-debug.exe");
+
+    bool hasUnrealBinariesStructure = HasUnrealBinariesParentStructure(exePath);
+
+    bool isUnreal = ContainsAny(productLower, { L"unreal", L"unreal engine" }) ||
+                    ContainsAny(companyLower, { L"epic games", L"epic games, inc." }) ||
+                    ContainsAny(copyrightLower, { L"epic games", L"unreal", L"unreal engine" }) ||
+                    ContainsAny(descriptionLower, { L"unreal", L"unreal engine" }) || hasUnrealShippingExePattern ||
+                    hasUnrealBinariesStructure;
+
+    if (isUnreal)
+    {
+        State::Instance().GameEngine = GameEngineType::Unreal;
+        return;
+    }
 }
 
 std::filesystem::path Util::DllPath()

@@ -40,7 +40,7 @@ bool GetDLLVersion(std::wstring dllPath, version_t* versionOut);
 bool GetDLLVersion(std::wstring dllPath, xess_version_t* versionOut);
 bool GetRealWindowsVersion(OSVERSIONINFOW& osInfo);
 std::string GetWindowsName(const OSVERSIONINFOW& os);
-std::wstring GetExeProductName();
+void GetExeInfo();
 std::wstring GetWindowTitle(HWND hwnd);
 std::optional<std::filesystem::path> FindFilePath(const std::filesystem::path& startDir,
                                                   const std::filesystem::path fileName);

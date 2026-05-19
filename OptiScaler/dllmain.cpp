@@ -45,6 +45,7 @@
 #include "spoofing/User32_Spoofing.h"
 
 #include <cwctype>
+#include <magic_enum.hpp>
 #include <version_check.h>
 
 static std::vector<HMODULE> _asiHandles;
@@ -1256,15 +1257,14 @@ static void printQuirks(flag_set<GameQuirk>& quirks)
 
 static void CheckQuirks()
 {
-    auto exePathFilename = Util::ExePath().filename().string();
+    Util::GetExeInfo();
 
-    State::Instance().GameExe = exePathFilename;
-    State::Instance().GameName = wstring_to_string(Util::GetExeProductName());
-
-    LOG_INFO("Game's Exe: {0}", exePathFilename);
+    LOG_INFO("Game's Exe: {0}", State::Instance().GameExe);
     LOG_INFO("Game Name: {0}", State::Instance().GameName);
+    LOG_INFO("Game Version: {0}", State::Instance().GameVersion);
+    LOG_INFO("Game Engine: {0}", magic_enum::enum_name(State::Instance().GameEngine));
 
-    auto quirks = getQuirksForExe(exePathFilename);
+    auto quirks = getQuirksForExe(State::Instance().GameExe);
 
     auto state = &State::Instance();
 
