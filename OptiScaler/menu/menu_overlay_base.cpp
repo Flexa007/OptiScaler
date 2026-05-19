@@ -38,6 +38,8 @@ bool MenuOverlayBase::RenderMenu()
     return MenuCommon::RenderMenu();
 }
 
+void MenuOverlayBase::Present() { MenuCommon::Present(); }
+
 void MenuOverlayBase::Shutdown() { MenuCommon::Shutdown(); }
 
 void MenuOverlayBase::HideMenu() { MenuCommon::HideMenu(); }

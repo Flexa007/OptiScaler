@@ -21,4 +21,5 @@ class MenuOverlayBase
     static bool RenderMenu();
     static void Shutdown();
     static void HideMenu();
+    static void Present();
 };

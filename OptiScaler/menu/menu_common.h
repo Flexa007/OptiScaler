@@ -200,4 +200,5 @@ class MenuCommon
     static void Init(HWND InHwnd, bool isUWP);
     static void Shutdown();
     static void HideMenu();
+    static void Present();
 };

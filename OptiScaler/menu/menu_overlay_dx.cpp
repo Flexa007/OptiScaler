@@ -554,7 +554,10 @@ void MenuOverlayDx::Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
                             const DXGI_PRESENT_PARAMETERS* pPresentParameters, IUnknown* pDevice, HWND hWnd, bool isUWP)
 {
     if (!Config::Instance()->OverlayMenu.value_or_default())
+    {
+        MenuOverlayBase::Present();
         return;
+    }
 
     LOG_DEBUG("");
 

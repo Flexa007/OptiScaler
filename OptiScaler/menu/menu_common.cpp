@@ -1821,7 +1821,20 @@ static void ApplyThemeStyle()
 }
 
 static double lastTime = 0.0;
+static double lastFrameTime = 0.0;
 static UINT64 uwpTargetFrame = 0;
+
+void MenuCommon::Present()
+{
+    _frameCount++;
+
+    auto now = Util::MillisecondsNow();
+
+    if (lastTime > 0.0)
+        lastFrameTime = now - lastTime;
+
+    lastTime = now;
+}
 
 bool MenuCommon::RenderMenu()
 {
@@ -1831,20 +1844,28 @@ bool MenuCommon::RenderMenu()
     auto& state = State::Instance();
     auto config = Config::Instance();
 
-    _frameCount++;
-
-    // FPS & frame time calculation
     auto now = Util::MillisecondsNow();
     double frameTime = 0.0;
     double frameRate = 0.0;
 
-    if (lastTime > 0.0)
+    if (config->OverlayMenu.value_or_default())
     {
-        frameTime = now - lastTime;
+        _frameCount++;
+
+        // FPS & frame time calculation
+        if (lastTime > 0.0)
+        {
+            frameTime = now - lastTime;
+            frameRate = 1000.0 / frameTime;
+        }
+
+        lastTime = now;
+    }
+    else
+    {
+        frameTime = lastFrameTime;
         frameRate = 1000.0 / frameTime;
     }
-
-    lastTime = now;
 
     state.frameTimes.pop_front();
     state.frameTimes.push_back(frameTime);
