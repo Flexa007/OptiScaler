@@ -32,6 +32,7 @@ class KernelHooks
     inline static Kernel32Proxy::PFN_GetFileAttributesW o_K32_GetFileAttributesW = nullptr;
     inline static Kernel32Proxy::PFN_CreateFileW o_K32_CreateFileW = nullptr;
     inline static Kernel32Proxy::PFN_OutputDebugStringW o_K32_OutputDebugStringW = nullptr;
+    inline static Kernel32Proxy::PFN_OutputDebugStringA o_K32_OutputDebugStringA = nullptr;
 
     inline static KernelBaseProxy::PFN_FreeLibrary o_KB_FreeLibrary = nullptr;
     inline static KernelBaseProxy::PFN_LoadLibraryA o_KB_LoadLibraryA = nullptr;
@@ -51,6 +52,7 @@ class KernelHooks
                                             LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition,
                                             DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
     static VOID WINAPI hk_K32_OutputDebugStringW(LPCWSTR lpOutputString);
+    static VOID WINAPI hk_K32_OutputDebugStringA(LPCSTR lpOutputString);
 
     static HMODULE hk_K32_LoadLibraryW(LPCWSTR lpLibFileName);
     static HMODULE hk_K32_LoadLibraryA(LPCSTR lpLibFileName);
@@ -80,6 +82,7 @@ class KernelHooks
 
 #ifdef HOOK_OUTPUT_DEBUG
         o_K32_OutputDebugStringW = Kernel32Proxy::Hook_OutputDebugStringW(hk_K32_OutputDebugStringW);
+        o_K32_OutputDebugStringA = Kernel32Proxy::Hook_OutputDebugStringA(hk_K32_OutputDebugStringA);
 #endif
 
         if (!Config::Instance()->UseNtdllHooks.value_or_default())

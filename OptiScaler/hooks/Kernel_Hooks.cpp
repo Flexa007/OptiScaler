@@ -248,6 +248,21 @@ VOID WINAPI KernelHooks::hk_K32_OutputDebugStringW(LPCWSTR lpOutputString)
     LOG_TRACE(L"{}", result);
 }
 
+VALIDATE_HOOK(hk_K32_OutputDebugStringA, Kernel32Proxy::PFN_OutputDebugStringA)
+VOID WINAPI KernelHooks::hk_K32_OutputDebugStringA(LPCSTR lpOutputString)
+{
+    o_K32_OutputDebugStringA(lpOutputString);
+
+    std::string result(lpOutputString);
+
+    while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
+    {
+        result.pop_back();
+    }
+
+    LOG_TRACE("{}", result);
+}
+
 // Load Library checks
 
 VALIDATE_HOOK(hk_K32_LoadLibraryW, Kernel32Proxy::PFN_LoadLibraryW)

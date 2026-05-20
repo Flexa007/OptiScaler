@@ -24,6 +24,7 @@
     X(GetModuleHandleExW)                                                                                              \
     X(GetFileAttributesW)                                                                                              \
     X(CreateFileW)                                                                                                     \
+    X(OutputDebugStringA)                                                                                              \
     X(OutputDebugStringW)
 
 class Kernel32Proxy
