@@ -151,9 +151,6 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApp
 {
     LOG_FUNC();
 
-    if (Config::Instance()->UseGenericAppIdWithDlss.value_or_default())
-        InApplicationId = app_id_override;
-
     NVSDK_NGX_FeatureCommonInfo localFeatureInfo = {};
     std::memcpy(&localFeatureInfo, InFeatureInfo, sizeof(NVSDK_NGX_FeatureCommonInfo));
 
@@ -164,18 +161,20 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApp
     State::Instance().NVNGX_ApplicationDataPath = std::wstring(InApplicationDataPath);
     State::Instance().NVNGX_Version = InSDKVersion;
     State::Instance().NVNGX_FeatureInfo = &localFeatureInfo;
-
-    if (InFeatureInfo != nullptr && InSDKVersion > 0x0000013)
-        State::Instance().NVNGX_Logger = InFeatureInfo->LoggingInfo;
+    State::Instance().NVNGX_Version = InSDKVersion;
 
     if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
     {
+        if (Config::Instance()->UseGenericAppIdWithDlss.value_or_default())
+            InApplicationId = app_id_override;
+
         if (NVNGXProxy::NVNGXModule() == nullptr)
             NVNGXProxy::InitNVNGX();
 
         if (NVNGXProxy::NVNGXModule() != nullptr && NVNGXProxy::D3D12_Init_Ext() != nullptr)
         {
             LOG_INFO("calling NVNGXProxy::D3D12_Init_Ext");
+
             auto result = NVNGXProxy::D3D12_Init_Ext()(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion,
                                                        &localFeatureInfo);
             LOG_INFO("calling NVNGXProxy::D3D12_Init_Ext result: {0:X}", (UINT) result);
@@ -188,6 +187,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApp
             LOG_WARN("NVNGXProxy::NVNGXModule or NVNGXProxy::D3D12_Init_Ext is nullptr!");
         }
     }
+
+    if (InFeatureInfo != nullptr && InSDKVersion > 0x0000013)
+        State::Instance().NVNGX_Logger = InFeatureInfo->LoggingInfo;
 
     if (State::Instance().NvngxDx12Inited)
     {
@@ -459,6 +461,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetParameters(NVSDK_NGX_Parameter
 
     *OutParameters = GetNGXParameters("OptiDx12");
 
+    LOG_DEBUG("Returning custom Opti parameters");
+
     return NVSDK_NGX_Result_Success;
 }
 
@@ -485,6 +489,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetCapabilityParameters(NVSDK_NGX
     }
 
     *OutParameters = GetNGXParameters("OptiDx12");
+
+    LOG_DEBUG("Returning custom Opti parameters");
 
     return NVSDK_NGX_Result_Success;
 }

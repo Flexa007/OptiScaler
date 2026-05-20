@@ -144,6 +144,12 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_Init_Ext(unsigned long long InApp
     if (!_skipInit)
         UpdateInitPaths(&localFeatureInfo);
 
+    State::Instance().NVNGX_ApplicationId = InApplicationId;
+    State::Instance().NVNGX_ApplicationDataPath = std::wstring(InApplicationDataPath);
+    State::Instance().NVNGX_Version = InSDKVersion;
+    State::Instance().NVNGX_FeatureInfo = InFeatureInfo;
+    State::Instance().NVNGX_Version = InSDKVersion;
+
     if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
     {
         if (Config::Instance()->UseGenericAppIdWithDlss.value_or_default())
@@ -164,15 +170,20 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_Init_Ext(unsigned long long InApp
             if (result == NVSDK_NGX_Result_Success)
                 NVNGXProxy::SetDx11Inited(true);
         }
+        else
+        {
+            LOG_WARN("NVNGXProxy::NVNGXModule or NVNGXProxy::D3D11_Init_Ext is nullptr!");
+        }
     }
-
-    State::Instance().NVNGX_ApplicationId = InApplicationId;
-    State::Instance().NVNGX_ApplicationDataPath = std::wstring(InApplicationDataPath);
-    State::Instance().NVNGX_Version = InSDKVersion;
-    State::Instance().NVNGX_FeatureInfo = InFeatureInfo;
 
     if (InFeatureInfo != nullptr && InSDKVersion > 0x0000013)
         State::Instance().NVNGX_Logger = InFeatureInfo->LoggingInfo;
+
+    if (State::Instance().NvngxDx11Inited)
+    {
+        LOG_WARN("NVNGX already inited");
+        return NVSDK_NGX_Result_Success;
+    }
 
     LOG_INFO("AppId: {0}", InApplicationId);
     LOG_INFO("SDK: {0:x}", (int) InSDKVersion);
@@ -391,6 +402,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_GetParameters(NVSDK_NGX_Parameter
     }
 
     *OutParameters = GetNGXParameters("OptiDx11");
+
+    LOG_DEBUG("Returning custom Opti parameters");
+
     return NVSDK_NGX_Result_Success;
 }
 
@@ -418,6 +432,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_GetCapabilityParameters(NVSDK_NGX
     }
 
     *OutParameters = GetNGXParameters("OptiDx11");
+
+    LOG_DEBUG("Returning custom Opti parameters");
 
     return NVSDK_NGX_Result_Success;
 }
