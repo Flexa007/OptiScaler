@@ -1510,12 +1510,12 @@ static void CheckQuirks()
             continue;
 
         const auto& path = entry.path();
-        if (path.extension() == L".addon")
+        if (path.extension() == L".addon" || path.extension() == L".addon64")
         {
             const auto fname = Util::ToLower(path.filename().wstring());
 
-            // starts with "luma-" or "dlaa-inject."
-            if (fname.rfind(L"luma-", 0) == 0 || fname.rfind(L"dlaa-inject.", 0) == 0)
+            // starts with "luma-" or "dlaa-inject"
+            if ((fname.rfind(L"luma-", 0) == 0) || (fname.rfind(L"dlaa-inject", 0) == 0))
             {
                 lumaDetected = true;
                 break;
