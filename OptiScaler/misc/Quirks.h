@@ -112,6 +112,8 @@ static const QuirkEntry quirkTable[] = {
     // Path of Exile 2
     QUIRK_ENTRY("pathofexile.exe", GameQuirk::LoadD3D12Manually, GameQuirk::DisableDxgiSpoofing),
     QUIRK_ENTRY("pathofexile_x64.exe", GameQuirk::LoadD3D12Manually, GameQuirk::DisableDxgiSpoofing),
+    QUIRK_ENTRY("pathofexile_kg.exe", GameQuirk::LoadD3D12Manually, GameQuirk::DisableDxgiSpoofing),
+    QUIRK_ENTRY("pathofexile_x64_kg.exe", GameQuirk::LoadD3D12Manually, GameQuirk::DisableDxgiSpoofing),
     QUIRK_ENTRY("pathofexilesteam.exe", GameQuirk::LoadD3D12Manually, GameQuirk::DisableDxgiSpoofing),
     QUIRK_ENTRY("pathofexile_x64steam.exe", GameQuirk::LoadD3D12Manually, GameQuirk::DisableDxgiSpoofing),
 
