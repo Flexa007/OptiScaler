@@ -821,8 +821,8 @@ LRESULT MenuCommon::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
                 if (inputFpsCycle)
                     LOG_DEBUG("Menu key pressed, will be switching FPS mode");
+            }
         }
-    }
     }
 
     if (!lastKey && msg == WM_KEYUP)
@@ -5849,13 +5849,19 @@ bool MenuCommon::RenderMenu()
                     { return ImVec4(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, alpha); };
 
                     auto AccentSoft = [&](ImVec4 accent, float alpha = 1.0f)
-                    { return lightTheme ? Mix(bgLight, accent, 0.24f, alpha) : Mix(bgDark, accent, 0.32f, alpha); };
+                    {
+                        return toneMapColor(lightTheme ? Mix(bgLight, accent, 0.24f, alpha)
+                                                       : Mix(bgDark, accent, 0.32f, alpha));
+                    };
 
                     auto AccentMed = [&](ImVec4 accent, float alpha = 1.0f)
-                    { return lightTheme ? Mix(bgLight, accent, 0.42f, alpha) : Mix(bgDark, accent, 0.55f, alpha); };
+                    {
+                        return toneMapColor(lightTheme ? Mix(bgLight, accent, 0.42f, alpha)
+                                                       : Mix(bgDark, accent, 0.55f, alpha));
+                    };
 
                     auto AccentStrong = [&](ImVec4 accent, float alpha = 1.0f)
-                    { return ImVec4(accent.x, accent.y, accent.z, alpha); };
+                    { return toneMapColor(ImVec4(accent.x, accent.y, accent.z, alpha)); };
 
                     if (ImGui::Checkbox("Light Theme", &lightTheme))
                     {
