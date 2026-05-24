@@ -7356,9 +7356,10 @@ void MenuCommon::Init(HWND InHwnd, bool isUWP)
     }
     else
     {
-        LOG_WARN("HWND does not belong to current process,"
-                 " Manual input polling will be used. HWND PID: {}, Current PID: {}",
-                 hwndPid, GetCurrentProcessId());
+        if (!Config::Instance()->ManualInputPolling.value_or_default())
+            LOG_WARN("HWND does not belong to current process, Manual input polling will be used");
+        else
+            LOG_DEBUG("Manual input polling enabled by config");
 
         inputManual = true;
     }
