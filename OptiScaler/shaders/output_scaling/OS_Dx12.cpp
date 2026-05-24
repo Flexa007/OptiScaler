@@ -263,7 +263,7 @@ OS_Dx12::OS_Dx12(std::string InName, ID3D12Device* InDevice, bool InUpsample)
         if (Config::Instance()->OutputScalingDownscaler.value_or_default() == Scaler::FSR1)
         {
             computePsoDesc.CS =
-                CD3DX12_SHADER_BYTECODE(reinterpret_cast<const void*>(FSR_EASU_cso), sizeof(FSR_EASU_cso));
+                CD3DX12_SHADER_BYTECODE(reinterpret_cast<const void*>(fsr_easu_cso), sizeof(fsr_easu_cso));
         }
         else
         {

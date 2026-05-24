@@ -251,7 +251,7 @@ OS_Dx11::OS_Dx11(std::string InName, ID3D11Device* InDevice, bool InUpsample)
         // fsr upscaling
         if (Config::Instance()->OutputScalingDownscaler.value_or_default() == Scaler::FSR1)
         {
-            hr = _device->CreateComputeShader(reinterpret_cast<const void*>(FSR_EASU_cso), sizeof(FSR_EASU_cso),
+            hr = _device->CreateComputeShader(reinterpret_cast<const void*>(fsr_easu_cso), sizeof(fsr_easu_cso),
                                               nullptr, &_computeShader);
         }
         else
