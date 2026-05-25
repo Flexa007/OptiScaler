@@ -279,7 +279,7 @@ static const QuirkEntry quirkTable[] = {
                 GameQuirk::ForceBorderlessWhenUsingXeFG),
 
     // Metro Exodus Enhanced Edition
-    // ForceBorderless required to avoid black screen with XeFG
+    // ForceBorderless required to avoid black screen with XeFG, Manual Input polling for fixing invisible Opti Overlay
     QUIRK_ENTRY("metroexodus.exe", GameQuirk::DisableDxgiSpoofing, GameQuirk::ForceBorderlessWhenUsingXeFG,
                 GameQuirk::ForceAutoExposure, GameQuirk::UseManualInputs),
 
@@ -306,6 +306,10 @@ static const QuirkEntry quirkTable[] = {
     // DCS World
     // Fakenvapi seems to cause a crash when switching to FSR4 (INT8 only?)
     QUIRK_ENTRY("dcs.exe", GameQuirk::DisableFakenvapi),
+
+    // S.T.A.L.K.E.R.: Legends of the Zone Trilogy - Enhanced Editions
+    // Manual input polling for fixing invisible Opti Overlay, no spoof needed for DLSS inputs
+    QUIRK_ENTRY("xrengine.exe", GameQuirk::UseManualInputs, GameQuirk::DisableDxgiSpoofing),
 
     // SL spoof enough to unlock everything DLSS/No spoof needed for DLSS inputs
     //
