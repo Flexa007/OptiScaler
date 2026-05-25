@@ -311,16 +311,24 @@ static const QuirkEntry quirkTable[] = {
     // Manual input polling for fixing invisible Opti Overlay, no spoof needed for DLSS inputs
     QUIRK_ENTRY("xrengine.exe", GameQuirk::UseManualInputs, GameQuirk::DisableDxgiSpoofing),
 
+    // Dying Light 2: Reloaded Edition
+    // SL spoof enough to unlock everything DLSS, manual input polling for fixing unclickable Opti Overlay
+    QUIRK_ENTRY("dyinglightgame_x64_rwdi.exe", GameQuirk::DisableDxgiSpoofing, GameQuirk::UseManualInputs),
+
+    // Dying Light: The Beast
+    // SL spoof enough to unlock everything DLSS, manual input polling for fixing unclickable Opti Overlay
+    QUIRK_ENTRY("dyinglightgame_thebeast_x64_rwdi.exe", GameQuirk::DisableDxgiSpoofing, GameQuirk::UseManualInputs),
+
     // SL spoof enough to unlock everything DLSS/No spoof needed for DLSS inputs
     //
     // The Witcher 3, Alan Wake 2, Crysis 3 Remastered, Marvel's Guardians of the Galaxy, UNCHARTED: Legacy of Thieves
-    // Collection, Warhammer 40,000: Darktide, Dying Light 2 Stay Human, Dying Light: The Beast, Observer: System Redux,
-    // Sackboy: A Big Adventure, Hellblade: Senua's Sacrifice, Pumpkin Jack, Rise of the Ronin, DYNASTY WARRIORS:
-    // ORIGINS, Crysis Remastered, Crysis 2 Remastered, Mortal Shell, Sekiro: Shadows Die Twice (for SekiroTSR mod), The
-    // Medium, NINJA GAIDEN 4 (+ WinGDK), God of War (2018), Europa Universalis V, Need for Speed Unbound, Nioh 2 – The
-    // Complete Edition, Control Ultimate Edition, Deathloop, Where Winds Meet, FINAL FANTASY VII REMAKE INTERGRADE (for
-    // Luma mod), Assassin’s Creed Shadows, Farming Simulator 2025, Nioh 3, FATAL FRAME II: Crimson Butterfly REMAKE,
-    // OUTRIDERS, Assetto Corsa EVO, MOUSE: P.I. For Hire, Yet Another Zombie Survivors, Voodoo Fishin', Forza Horizon 6
+    // Collection, Warhammer 40,000: Darktide, Observer: System Redux, Sackboy: A Big Adventure, Hellblade: Senua's
+    // Sacrifice, Pumpkin Jack, Rise of the Ronin, DYNASTY WARRIORS: ORIGINS, Crysis Remastered, Crysis 2 Remastered,
+    // Mortal Shell, Sekiro: Shadows Die Twice (for SekiroTSR mod), The Medium, NINJA GAIDEN 4 (+ WinGDK), God of War
+    // (2018), Europa Universalis V, Need for Speed Unbound, Nioh 2 – The Complete Edition, Control Ultimate Edition,
+    // Deathloop, Where Winds Meet, FINAL FANTASY VII REMAKE INTERGRADE (for Luma mod), Assassin’s Creed Shadows,
+    // Farming Simulator 2025, Nioh 3, FATAL FRAME II: Crimson Butterfly REMAKE, OUTRIDERS, Assetto Corsa EVO, MOUSE:
+    // P.I. For Hire, Yet Another Zombie Survivors, Voodoo Fishin', Forza Horizon 6
     QUIRK_ENTRY("witcher3.exe", GameQuirk::DisableDxgiSpoofing),
     QUIRK_ENTRY("alanwake2.exe", GameQuirk::DisableDxgiSpoofing),
     QUIRK_ENTRY("crysis3remastered.exe", GameQuirk::DisableDxgiSpoofing),
@@ -330,8 +338,6 @@ static const QuirkEntry quirkTable[] = {
     QUIRK_ENTRY("tll.exe", GameQuirk::DisableDxgiSpoofing),
     QUIRK_ENTRY("tll-l.exe", GameQuirk::DisableDxgiSpoofing),
     QUIRK_ENTRY("darktide.exe", GameQuirk::DisableDxgiSpoofing),
-    QUIRK_ENTRY("dyinglightgame_x64_rwdi.exe", GameQuirk::DisableDxgiSpoofing),
-    QUIRK_ENTRY("dyinglightgame_thebeast_x64_rwdi.exe", GameQuirk::DisableDxgiSpoofing),
     QUIRK_ENTRY("observersystemredux.exe", GameQuirk::DisableDxgiSpoofing, GameQuirk::ForceAutoExposure),
     QUIRK_ENTRY_UE(sackboy, GameQuirk::DisableDxgiSpoofing, GameQuirk::ForceAutoExposure),
     QUIRK_ENTRY_UE(hellbladegame, GameQuirk::DisableDxgiSpoofing),
