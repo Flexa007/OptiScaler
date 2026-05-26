@@ -215,6 +215,11 @@ static const QuirkEntry quirkTable[] = {
     QUIRK_ENTRY("hitman3.exe", GameQuirk::DisableDxgiSpoofing, GameQuirk::HitmanReflexHacks,
                 GameQuirk::DisableFSR2Inputs),
 
+    // 007 First Light
+    // SL spoof enough to unlock everything DLSS, RestoreCompute like Crapcom
+    QUIRK_ENTRY("007firstlight.exe", GameQuirk::DisableDxgiSpoofing, GameQuirk::RestoreComputeSigOnNonNvidia,
+                GameQuirk::RestoreComputeSigOnNvidia),
+
     // ELDEN RING (for ERSS mod) and ER NIGHTREIGN (for NRSS mod)
     // no spoof needed for DLSS inputs
     QUIRK_ENTRY("eldenring.exe", GameQuirk::DisableDxgiSpoofing),
