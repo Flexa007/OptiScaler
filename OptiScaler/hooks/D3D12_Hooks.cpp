@@ -65,19 +65,30 @@ using PFN_SetComputeRootSignature =
     rewrite_signature<decltype(&ID3D12GraphicsCommandList::SetComputeRootSignature)>::type;
 using PFN_SetGraphicsRootSignature =
     rewrite_signature<decltype(&ID3D12GraphicsCommandList::SetGraphicsRootSignature)>::type;
+using PFN_SetDescriptorHeaps = rewrite_signature<decltype(&ID3D12GraphicsCommandList::SetDescriptorHeaps)>::type;
 
 static PFN_SetComputeRootSignature o_SetComputeRootSignature = nullptr;
 static PFN_SetGraphicsRootSignature o_SetGraphicsRootSignature = nullptr;
+static PFN_SetDescriptorHeaps o_SetDescriptorHeaps = nullptr;
 
 static std::atomic_bool hookedLate = false;
 static PFN_SetComputeRootSignature o_SetComputeRootSignatureLate = nullptr;
 static PFN_SetGraphicsRootSignature o_SetGraphicsRootSignatureLate = nullptr;
+static PFN_SetDescriptorHeaps o_SetDescriptorHeapsLate = nullptr;
+
+struct DescriptorHeap
+{
+    UINT NumDescriptorHeaps;
+    ID3D12DescriptorHeap* Heaps[2] = { nullptr, nullptr }; // apparently 2 is max
+};
 
 static ankerl::unordered_dense::map<ID3D12GraphicsCommandList*, ID3D12RootSignature*> computeSignatures;
 static ankerl::unordered_dense::map<ID3D12GraphicsCommandList*, ID3D12RootSignature*> graphicSignatures;
+static ankerl::unordered_dense::map<ID3D12GraphicsCommandList*, DescriptorHeap> descriptorHeaps;
 static bool isUpscalerActive = false;
 static std::shared_mutex computeSigatureMutex;
 static std::shared_mutex graphSigatureMutex;
+static std::shared_mutex descriptorHeapsMutex;
 
 // Intel Atomic Extension
 struct UE_D3D12_RESOURCE_DESC
@@ -272,6 +283,26 @@ static void hkSetGraphicsRootSignature(ID3D12GraphicsCommandList* commandList, I
     o_SetGraphicsRootSignature(commandList, pRootSignature);
 }
 
+VALIDATE_HOOK(hkSetDescriptorHeaps, PFN_SetDescriptorHeaps)
+static void hkSetDescriptorHeaps(ID3D12GraphicsCommandList* commandList, UINT NumDescriptorHeaps,
+                                 ID3D12DescriptorHeap* const* ppDescriptorHeaps)
+{
+    if (Config::Instance()->RestoreDescriptorHeaps.value_or_default() && !isUpscalerActive && commandList != nullptr &&
+        ppDescriptorHeaps != nullptr && !hookedLate)
+    {
+        std::unique_lock<std::shared_mutex> lock(descriptorHeapsMutex);
+        DescriptorHeap temp {};
+        temp.NumDescriptorHeaps = NumDescriptorHeaps;
+        for (UINT i = 0; i < NumDescriptorHeaps; ++i)
+        {
+            temp.Heaps[i] = ppDescriptorHeaps[i];
+        }
+        descriptorHeaps.insert_or_assign(commandList, std::move(temp));
+    }
+
+    o_SetDescriptorHeaps(commandList, NumDescriptorHeaps, ppDescriptorHeaps);
+}
+
 VALIDATE_HOOK(hkSetComputeRootSignatureLate, PFN_SetComputeRootSignature)
 static void hkSetComputeRootSignatureLate(ID3D12GraphicsCommandList* commandList, ID3D12RootSignature* pRootSignature)
 {
@@ -298,6 +329,26 @@ static void hkSetGraphicsRootSignatureLate(ID3D12GraphicsCommandList* commandLis
     o_SetGraphicsRootSignatureLate(commandList, pRootSignature);
 }
 
+VALIDATE_HOOK(hkSetDescriptorHeapsLate, PFN_SetDescriptorHeaps)
+static void hkSetDescriptorHeapsLate(ID3D12GraphicsCommandList* commandList, UINT NumDescriptorHeaps,
+                                     ID3D12DescriptorHeap* const* ppDescriptorHeaps)
+{
+    if (Config::Instance()->RestoreDescriptorHeaps.value_or_default() && !isUpscalerActive && commandList != nullptr &&
+        ppDescriptorHeaps != nullptr)
+    {
+        std::unique_lock<std::shared_mutex> lock(descriptorHeapsMutex);
+        DescriptorHeap temp {};
+        temp.NumDescriptorHeaps = NumDescriptorHeaps;
+        for (UINT i = 0; i < NumDescriptorHeaps; ++i)
+        {
+            temp.Heaps[i] = ppDescriptorHeaps[i];
+        }
+        descriptorHeaps.insert_or_assign(commandList, std::move(temp));
+    }
+
+    o_SetDescriptorHeapsLate(commandList, NumDescriptorHeaps, ppDescriptorHeaps);
+}
+
 void D3D12Hooks::HookToCommandListLate(ID3D12GraphicsCommandList* commandList)
 {
     if (o_SetComputeRootSignatureLate || o_SetGraphicsRootSignatureLate)
@@ -306,13 +357,18 @@ void D3D12Hooks::HookToCommandListLate(ID3D12GraphicsCommandList* commandList)
     // Get the vtable pointer
     PVOID* pVTable = *(PVOID**) commandList;
 
+    o_SetDescriptorHeapsLate = (PFN_SetDescriptorHeaps) pVTable[28];
     o_SetComputeRootSignatureLate = (PFN_SetComputeRootSignature) pVTable[29];
     o_SetGraphicsRootSignatureLate = (PFN_SetGraphicsRootSignature) pVTable[30];
 
-    if (o_SetComputeRootSignatureLate != nullptr || o_SetGraphicsRootSignatureLate != nullptr)
+    if (o_SetDescriptorHeapsLate != nullptr || o_SetComputeRootSignatureLate != nullptr ||
+        o_SetGraphicsRootSignatureLate != nullptr)
     {
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());
+
+        if (o_SetDescriptorHeapsLate != nullptr)
+            DetourAttach(&(PVOID&) o_SetDescriptorHeapsLate, hkSetDescriptorHeapsLate);
 
         if (o_SetComputeRootSignatureLate != nullptr)
             DetourAttach(&(PVOID&) o_SetComputeRootSignatureLate, hkSetComputeRootSignatureLate);
@@ -343,13 +399,18 @@ static void HookToCommandList(ID3D12Device* InDevice)
             // Get the vtable pointer
             PVOID* pVTable = *(PVOID**) commandList;
 
+            o_SetDescriptorHeaps = (PFN_SetDescriptorHeaps) pVTable[28];
             o_SetComputeRootSignature = (PFN_SetComputeRootSignature) pVTable[29];
             o_SetGraphicsRootSignature = (PFN_SetGraphicsRootSignature) pVTable[30];
 
-            if (o_SetComputeRootSignature != nullptr || o_SetGraphicsRootSignature != nullptr)
+            if (o_SetDescriptorHeaps != nullptr || o_SetComputeRootSignature != nullptr ||
+                o_SetGraphicsRootSignature != nullptr)
             {
                 DetourTransactionBegin();
                 DetourUpdateThread(GetCurrentThread());
+
+                if (o_SetDescriptorHeaps != nullptr)
+                    DetourAttach(&(PVOID&) o_SetDescriptorHeaps, hkSetDescriptorHeaps);
 
                 if (o_SetComputeRootSignature != nullptr)
                     DetourAttach(&(PVOID&) o_SetComputeRootSignature, hkSetComputeRootSignature);
@@ -1320,13 +1381,42 @@ bool D3D12Hooks::CanRestoreGraphicsRootSignature(ID3D12GraphicsCommandList* cmdL
     return graphicSignatures.contains(cmdList);
 }
 
+void D3D12Hooks::RestoreDescriptorHeaps(ID3D12GraphicsCommandList* cmdList)
+{
+    if (Config::Instance()->RestoreDescriptorHeaps.value_or_default())
+    {
+        if (descriptorHeaps.contains(cmdList))
+        {
+            auto& heaps = descriptorHeaps[cmdList];
+
+            if (heaps.NumDescriptorHeaps > 0 && heaps.Heaps[0] != nullptr)
+            {
+                LOG_TRACE("Restore DescriptorHeaps: {:X}, for CmdList: {:X}", (UINT64) heaps.Heaps[0],
+                          (UINT64) cmdList);
+                if (o_SetDescriptorHeapsLate)
+                    o_SetDescriptorHeapsLate(cmdList, heaps.NumDescriptorHeaps, heaps.Heaps);
+                else
+                    o_SetDescriptorHeaps(cmdList, heaps.NumDescriptorHeaps, heaps.Heaps);
+            }
+        }
+        else
+        {
+            LOG_TRACE("Can't restore ComputeRootSig for CmdList: {:X}", (UINT64) cmdList);
+        }
+    }
+}
+
 void D3D12Hooks::RestoreComputeRootSignature(ID3D12GraphicsCommandList* cmdList)
 {
     if (Config::Instance()->RestoreComputeSignature.value_or_default() && computeSignatures.contains(cmdList))
     {
+        RestoreDescriptorHeaps(cmdList);
         auto signature = computeSignatures[cmdList];
         LOG_TRACE("Restore ComputeRootSig: {:X}, for CmdList: {:X}", (UINT64) signature, (UINT64) cmdList);
-        o_SetComputeRootSignature(cmdList, signature);
+        if (o_SetComputeRootSignatureLate)
+            o_SetComputeRootSignatureLate(cmdList, signature);
+        else
+            o_SetComputeRootSignature(cmdList, signature);
     }
     else if (Config::Instance()->RestoreComputeSignature.value_or_default())
     {
@@ -1338,9 +1428,13 @@ void D3D12Hooks::RestoreGraphicsRootSignature(ID3D12GraphicsCommandList* cmdList
 {
     if (Config::Instance()->RestoreGraphicSignature.value_or_default() && graphicSignatures.contains(cmdList))
     {
+        RestoreDescriptorHeaps(cmdList);
         auto signature = graphicSignatures[cmdList];
         LOG_TRACE("Restore GraphicsRootSig: {:X}, for CmdList: {:X}", (UINT64) signature, (UINT64) cmdList);
-        o_SetGraphicsRootSignature(cmdList, signature);
+        if (o_SetGraphicsRootSignatureLate)
+            o_SetGraphicsRootSignatureLate(cmdList, signature);
+        else
+            o_SetGraphicsRootSignature(cmdList, signature);
     }
     else if (Config::Instance()->RestoreGraphicSignature.value_or_default())
     {

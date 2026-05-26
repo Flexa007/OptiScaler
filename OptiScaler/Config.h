@@ -370,6 +370,7 @@ class Config
     CustomOptional<int, NoDefault> SkipFirstFrames; // disabled by default
     CustomOptional<bool> RestoreComputeSignature { false };
     CustomOptional<bool> RestoreGraphicSignature { false };
+    CustomOptional<bool> RestoreDescriptorHeaps { false }; // not actually in the config
 
     CustomOptional<bool> UsePrecompiledShaders { true };
 
