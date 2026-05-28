@@ -7,7 +7,10 @@ class D3D12Hooks
   private:
     inline static std::mutex hookMutex;
     inline static std::mutex agilityMutex;
+
     static void RestoreDescriptorHeaps(ID3D12GraphicsCommandList* cmdList);
+    static void RestorePipelineState(ID3D12GraphicsCommandList* cmdList);
+    static void RestoreComputeRoot(ID3D12GraphicsCommandList* cmdList);
 
   public:
     static void Hook();

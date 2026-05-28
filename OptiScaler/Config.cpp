@@ -569,6 +569,7 @@ bool Config::Reload(std::filesystem::path iniPath)
 
             RestoreComputeSignature.set_from_config(readBool("Hotfix", "RestoreComputeSignature"));
             RestoreGraphicSignature.set_from_config(readBool("Hotfix", "RestoreGraphicSignature"));
+            ExtendedStateRestore.set_from_config(readBool("Hotfix", "ExtendedStateRestore"));
             PreferDedicatedGpu.set_from_config(readBool("Hotfix", "PreferDedicatedGpu"));
             PreferFirstDedicatedGpu.set_from_config(readBool("Hotfix", "PreferFirstDedicatedGpu"));
             SkipFirstFrames.set_from_config(readInt("Hotfix", "SkipFirstFrames"));
@@ -1210,6 +1211,8 @@ bool Config::SaveIni()
                      GetBoolValue(Instance()->RestoreComputeSignature.value_for_config()).c_str());
         ini.SetValue("Hotfix", "RestoreGraphicSignature",
                      GetBoolValue(Instance()->RestoreGraphicSignature.value_for_config()).c_str());
+        ini.SetValue("Hotfix", "ExtendedStateRestore",
+                     GetBoolValue(Instance()->ExtendedStateRestore.value_for_config()).c_str());
         ini.SetValue("Hotfix", "SkipFirstFrames", GetIntValue(Instance()->SkipFirstFrames.value_for_config()).c_str());
 
         ini.SetValue("Hotfix", "UsePrecompiledShaders",

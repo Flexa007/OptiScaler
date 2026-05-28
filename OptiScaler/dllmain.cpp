@@ -1145,8 +1145,8 @@ static void printQuirks(flag_set<GameQuirk>& quirks)
     if (quirks & GameQuirk::RestoreComputeSigOnNvidia)
         stringQuirks.push_back("Enabling restore compute signature on Nvidia");
 
-    if (quirks & GameQuirk::RestoreDescriptorHeapsWithSigs)
-        stringQuirks.push_back("Restoring descriptor heaps alongside the signatures");
+    if (quirks & GameQuirk::ExtendedSigRestore)
+        stringQuirks.push_back("Extended signatures restore");
 
     if (quirks & GameQuirk::DisableDxgiSpoofing)
         stringQuirks.push_back("Dxgi spoofing disabled by default");
@@ -1317,12 +1317,12 @@ static void CheckQuirks()
     else
         quirks.reset(GameQuirk::RestoreComputeSigOnNvidia);
 
-    if (quirks & GameQuirk::RestoreDescriptorHeapsWithSigs && !Config::Instance()->RestoreDescriptorHeaps.has_value())
+    if (quirks & GameQuirk::ExtendedSigRestore && !Config::Instance()->ExtendedStateRestore.has_value())
     {
-        Config::Instance()->RestoreDescriptorHeaps.set_volatile_value(true);
+        Config::Instance()->ExtendedStateRestore.set_volatile_value(true);
     }
     else
-        quirks.reset(GameQuirk::RestoreDescriptorHeapsWithSigs);
+        quirks.reset(GameQuirk::ExtendedSigRestore);
 
     if (quirks & GameQuirk::DisableReactiveMasks)
         Config::Instance()->DisableReactiveMask.set_volatile_value(true);
