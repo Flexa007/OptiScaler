@@ -34,9 +34,6 @@ enum class GameQuirk : uint64_t
     UseFsr2VulkanInputs,
     ForceBorderlessWhenUsingXeFG,
     OverrideVsyncWhenUsingXeFG,
-    SetDepthValidNow,
-    SetVelocityValidNow,
-    SetHudlessValidNow,
     DisableResizeSkip,
     SpoofRegistry,
     DisableFakenvapi,
@@ -63,6 +60,7 @@ enum class GameQuirk : uint64_t
     ForceCreateD3D12Device,
     ForceDepthD32S8,
     PregmataFixDLSSModes,
+    IgnoreValidUntilEvaluateForFG,
     // Don't forget to add the new entry to printQuirks
     _
 };
@@ -219,8 +217,8 @@ static const QuirkEntry quirkTable[] = {
     // 007 First Light
     // SL spoof enough to unlock everything DLSS, uses bindless so restoring compute is complicated
     QUIRK_ENTRY("007firstlight.exe", GameQuirk::DisableDxgiSpoofing, GameQuirk::RestoreComputeSigOnNonNvidia,
-                GameQuirk::RestoreComputeSigOnNvidia, GameQuirk::ExtendedSigRestore, GameQuirk::SetDepthValidNow,
-                GameQuirk::SetVelocityValidNow),
+                GameQuirk::RestoreComputeSigOnNvidia, GameQuirk::ExtendedSigRestore,
+                GameQuirk::IgnoreValidUntilEvaluateForFG),
 
     // ELDEN RING (for ERSS mod) and ER NIGHTREIGN (for NRSS mod)
     // no spoof needed for DLSS inputs
@@ -257,8 +255,7 @@ static const QuirkEntry quirkTable[] = {
     // Starfield
     // SL spoof enough to unlock everything DLSS, Depth and Velocity needed to avoid FG artifacts
     QUIRK_ENTRY("starfield.exe", GameQuirk::DisableFSR2Inputs, GameQuirk::DisableFSR3Inputs,
-                GameQuirk::DisableDxgiSpoofing, GameQuirk::ForceAutoExposure, GameQuirk::SetDepthValidNow,
-                GameQuirk::SetVelocityValidNow),
+                GameQuirk::DisableDxgiSpoofing, GameQuirk::ForceAutoExposure),
 
     // Nixxes Sony ports - Dxgi spoofing disabled due to RT crashes
     //

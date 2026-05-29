@@ -293,6 +293,15 @@ bool Sl_Inputs_Dx12::reportResource(const sl::ResourceTag& tag, ID3D12GraphicsCo
     if (fgOutput == nullptr || !Config::Instance()->FGEnabled.value_or_default())
         return false;
 
+    static const bool ignoreValidUntilEvaluateForFG =
+        State::Instance().gameQuirks[GameQuirk::IgnoreValidUntilEvaluateForFG];
+
+    // eValidUntilEvaluate is usually used for upscaling, not FG
+    // we could track multiple versions of the same resource for the same frame id
+    // to be able to compare validity but that seems pointless
+    if (tag.lifecycle == sl::eValidUntilEvaluate && ignoreValidUntilEvaluateForFG)
+        return false;
+
     LOG_DEBUG("Reporting SL resource type: {} lifecycle: {} frameId: {}", tag.type,
               magic_enum::enum_name(tag.lifecycle), frameId);
 
@@ -317,7 +326,14 @@ bool Sl_Inputs_Dx12::reportResource(const sl::ResourceTag& tag, ID3D12GraphicsCo
     res.height = tag.extent ? tag.extent.height : desc.Height;
     res.state = (D3D12_RESOURCE_STATES) tag.resource->state;
     res.validity =
-        (tag.lifecycle == sl::eOnlyValidNow) ? FG_ResourceValidity::ValidNow : FG_ResourceValidity::UntilPresent;
+        (tag.lifecycle == sl::eValidUntilPresent) ? FG_ResourceValidity::UntilPresent : FG_ResourceValidity::ValidNow;
+
+    // If eValidUntilEvaluate is provided without cmdList when there's not much we can do
+    if (!res.cmdList && res.validity != FG_ResourceValidity::UntilPresent)
+    {
+        LOG_WARN("YOLOing resource validity due to missing cmdList");
+        res.validity = FG_ResourceValidity::UntilPresent;
+    }
 
     if (frameId > 0)
     {

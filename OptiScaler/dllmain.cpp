@@ -1217,15 +1217,6 @@ static void printQuirks(flag_set<GameQuirk>& quirks)
     if (quirks & GameQuirk::ForceCreateD3D12Device)
         stringQuirks.push_back("Force create D3D12 device for w/Dx12");
 
-    if (quirks & GameQuirk::SetDepthValidNow)
-        stringQuirks.push_back("Set Depth as ValidNow");
-
-    if (quirks & GameQuirk::SetVelocityValidNow)
-        stringQuirks.push_back("Set Velocity as ValidNow");
-
-    if (quirks & GameQuirk::SetHudlessValidNow)
-        stringQuirks.push_back("Set Hudless as ValidNow");
-
     if (quirks & GameQuirk::DisableResizeSkip)
         stringQuirks.push_back("Disable Resize Skip");
 
@@ -1252,6 +1243,9 @@ static void printQuirks(flag_set<GameQuirk>& quirks)
 
     if (quirks & GameQuirk::UseManualInputs)
         stringQuirks.push_back("Use manual input polling");
+
+    if (quirks & GameQuirk::IgnoreValidUntilEvaluateForFG)
+        stringQuirks.push_back("Ignore ValidUntilEvaluate resources for FG");
 
     state->detectedQuirks.append_range(stringQuirks);
     for (auto& stringQuirk : stringQuirks)
@@ -1443,33 +1437,6 @@ static void CheckQuirks()
     }
     else
         quirks.reset(GameQuirk::OverrideVsyncWhenUsingXeFG);
-
-    if (quirks & GameQuirk::SetDepthValidNow && !Config::Instance()->FGDepthValidNow.has_value() &&
-        State::Instance().activeFgInput == FGInput::DLSSG && State::Instance().activeFgOutput != FGOutput::NoFG &&
-        State::Instance().activeFgOutput != FGOutput::Nukems)
-    {
-        Config::Instance()->FGDepthValidNow.set_volatile_value(true);
-    }
-    else
-        quirks.reset(GameQuirk::SetDepthValidNow);
-
-    if (quirks & GameQuirk::SetVelocityValidNow && !Config::Instance()->FGVelocityValidNow.has_value() &&
-        State::Instance().activeFgInput == FGInput::DLSSG && State::Instance().activeFgOutput != FGOutput::NoFG &&
-        State::Instance().activeFgOutput != FGOutput::Nukems)
-    {
-        Config::Instance()->FGVelocityValidNow.set_volatile_value(true);
-    }
-    else
-        quirks.reset(GameQuirk::SetVelocityValidNow);
-
-    if (quirks & GameQuirk::SetHudlessValidNow && !Config::Instance()->FGHudlessValidNow.has_value() &&
-        State::Instance().activeFgInput == FGInput::DLSSG && State::Instance().activeFgOutput != FGOutput::NoFG &&
-        State::Instance().activeFgOutput != FGOutput::Nukems)
-    {
-        Config::Instance()->FGHudlessValidNow.set_volatile_value(true);
-    }
-    else
-        quirks.reset(GameQuirk::SetHudlessValidNow);
 
     if (quirks & GameQuirk::DisableResizeSkip && !Config::Instance()->FGSkipResizeBuffers.has_value())
     {
