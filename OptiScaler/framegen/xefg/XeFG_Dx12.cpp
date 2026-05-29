@@ -1314,6 +1314,12 @@ bool XeFG_Dx12::SetResource(Dx12Resource* inputResource)
 
     std::unique_lock<std::shared_mutex> lock(_resourceMutex[fIndex]);
 
+    if (!inputResource->cmdList && inputResource->validity != FG_ResourceValidity::UntilPresent)
+    {
+        LOG_WARN("XeFG needs cmdList for ValidNow resources, YOLOing");
+        inputResource->validity = FG_ResourceValidity::UntilPresent;
+    }
+
     if (type == FG_ResourceType::HudlessColor)
     {
         if (Config::Instance()->FGDisableHudless.value_or_default())
