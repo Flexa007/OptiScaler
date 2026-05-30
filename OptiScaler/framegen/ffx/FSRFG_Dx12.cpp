@@ -615,6 +615,7 @@ ffxReturnCode_t FSRFG_Dx12::DispatchCallback(ffxDispatchDescFrameGeneration* par
     {
         LOG_WARN("Dispatched with the same frame id! frameID: {}", params->frameID);
         params->numGeneratedFrames = 0;
+        return FFX_API_RETURN_OK;
     }
 
     auto scFormat = (FfxApiSurfaceFormat) params->presentColor.description.format;
