@@ -341,7 +341,7 @@ bool XeFG_Dx12::CreateSwapchain(IDXGIFactory* factory, ID3D12CommandQueue* cmdQu
 
     // For old libxess_fg versions we use max to control interpolation count
     if (XeFGProxy::SetNumInterpolatedFrames() == nullptr)
-        intTarget = Config::Instance()->FGXeFGInterpolationCount.value_or(State::Instance().xefgMaxInterpolationCount);
+        intTarget = Config::Instance()->FGXeFGInterpolationCount.value_or_default();
 
     if (intTarget < 1 || intTarget > State::Instance().xefgMaxInterpolationCount)
     {
@@ -500,7 +500,7 @@ bool XeFG_Dx12::CreateSwapchain1(IDXGIFactory* factory, ID3D12CommandQueue* cmdQ
 
     // For old libxess_fg versions we use max to control interpolation count
     if (XeFGProxy::SetNumInterpolatedFrames() == nullptr)
-        intTarget = Config::Instance()->FGXeFGInterpolationCount.value_or(State::Instance().xefgMaxInterpolationCount);
+        intTarget = Config::Instance()->FGXeFGInterpolationCount.value_or_default();
 
     if (intTarget < 1 || intTarget > State::Instance().xefgMaxInterpolationCount)
     {
