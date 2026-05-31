@@ -291,8 +291,6 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
     }
     else if (CheckDllNameW(&libName, &overlayNamesW))
     {
-        LOG_DEBUG("Overlay dll: {}", wstring_to_string(libName));
-
         // If we hook CreateSwapChainForHwnd & CreateSwapChainForCoreWindow here
         // Order of CreateSwapChain calls become
         // Game -> Overlay -> Opti
@@ -304,6 +302,8 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
 
         auto module = NtdllProxy::LoadLibraryExW_Ldr(libName.c_str(), NULL, 0);
 
+        LOG_DEBUG("Overlay dll: {}, module: {:X}", wstring_to_string(libName), (size_t) module);
+
         if (module != nullptr)
         {
             auto filePath = std::filesystem::path(libName);
@@ -312,26 +312,34 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
 
             if (!_overlayMethodsCalled.contains(filename) && DxgiProxy::Module() != nullptr)
             {
-                _overlayMethodsCalled[filename] = true;
-
                 LOG_INFO("Calling CreateDxgiFactory methods for overlay!");
                 IDXGIFactory* factory = nullptr;
                 IDXGIFactory1* factory1 = nullptr;
                 IDXGIFactory2* factory2 = nullptr;
 
-                if (DxgiProxy::CreateDxgiFactory_()(__uuidof(factory), &factory) == S_OK && factory != nullptr)
+                auto ocResult = DxgiProxy::CreateDxgiFactory_()(__uuidof(factory), &factory);
+                LOG_DEBUG("CreateDxgiFactory result: {:X}", ocResult);
+
+                if (ocResult == S_OK && factory != nullptr)
                 {
+                    _overlayMethodsCalled[filename] = true;
                     LOG_DEBUG("CreateDxgiFactory ok");
                     factory->Release();
                 }
 
-                if (DxgiProxy::CreateDxgiFactory1_()(__uuidof(factory1), &factory1) == S_OK && factory1 != nullptr)
+                ocResult = DxgiProxy::CreateDxgiFactory1_()(__uuidof(factory1), &factory1);
+                LOG_DEBUG("CreateDxgiFactory1 result: {:X}", ocResult);
+
+                if (ocResult == S_OK && factory1 != nullptr)
                 {
                     LOG_DEBUG("CreateDxgiFactory1 ok");
                     factory1->Release();
                 }
 
-                if (DxgiProxy::CreateDxgiFactory2_()(0, __uuidof(factory2), &factory2) == S_OK && factory2 != nullptr)
+                ocResult = DxgiProxy::CreateDxgiFactory2_()(0, __uuidof(factory2), &factory2);
+                LOG_DEBUG("CreateDxgiFactory2 result: {:X}", ocResult);
+
+                if (ocResult == S_OK && factory2 != nullptr)
                 {
                     LOG_DEBUG("CreateDxgiFactory2 ok");
                     factory2->Release();

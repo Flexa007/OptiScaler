@@ -176,8 +176,8 @@ class NtdllHooks
         if (NtdllProxy::Module() == nullptr)
             return;
 
-        if (o_NtLoadDll == nullptr)
-            o_NtLoadDll = NtdllProxy::Hook_NtLoadDll(hkNtLoadDll);
+        // if (o_NtLoadDll == nullptr)
+        //     o_NtLoadDll = NtdllProxy::Hook_NtLoadDll(hkNtLoadDll);
 
         if (o_LdrLoadDll == nullptr)
             o_LdrLoadDll = NtdllProxy::Hook_LdrLoadDll(hkLdrLoadDll);

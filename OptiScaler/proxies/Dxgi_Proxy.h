@@ -40,6 +40,8 @@ class DxgiProxy
         if (_dll == nullptr)
             return;
 
+        LOG_DEBUG("dxgi.dll loaded at {:X}", (uintptr_t) _dll);
+
         _CreateDxgiFactory = (PFN_CreateDxgiFactory) KernelBaseProxy::GetProcAddress_()(_dll, "CreateDXGIFactory");
         _CreateDxgiFactory1 = (PFN_CreateDxgiFactory1) KernelBaseProxy::GetProcAddress_()(_dll, "CreateDXGIFactory1");
         _CreateDxgiFactory2 = (PFN_CreateDxgiFactory2) KernelBaseProxy::GetProcAddress_()(_dll, "CreateDXGIFactory2");

@@ -343,8 +343,6 @@ static void hkSetComputeRootSignature(ID3D12GraphicsCommandList* commandList, ID
         tracking = true;
     }
 
-    LOG_TRACE("Tracking: {}", tracking);
-
     s_SetComputeRootSignature.o_earlyHook(commandList, pRootSignature);
 }
 
