@@ -691,15 +691,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
         State::Instance().changeBackend[handleId] = true;
     }
 
-    if (Config::Instance()->RestoreComputeSignature.value_or_default() ||
-        Config::Instance()->RestoreGraphicSignature.value_or_default())
-    {
-        if (Config::Instance()->RestoreComputeSignature.value_or_default())
-            D3D12Hooks::RestoreComputeRoot(InCmdList);
+    if (Config::Instance()->RestoreComputeSignature.value_or_default())
+        D3D12Hooks::RestoreComputeRoot(InCmdList);
 
-        if (Config::Instance()->RestoreGraphicSignature.value_or_default())
-            D3D12Hooks::RestoreGraphicsRootSignature(InCmdList);
-    }
+    if (Config::Instance()->RestoreGraphicSignature.value_or_default())
+        D3D12Hooks::RestoreGraphicsRootSignature(InCmdList);
 
     D3D12Hooks::SetRootSignatureTracking(true);
 
@@ -942,6 +938,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
         Config::Instance()->RestoreGraphicSignature.value_or_default())
     {
         D3D12Hooks::SetRootSignatureTracking(false);
+        D3D12Hooks::HookToCommandListLate(InCmdList);
     }
 
     UpscalerInputsDx12::UpscaleStart(InCmdList, InParameters, deviceContext->feature.get());
@@ -973,15 +970,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     NVSDK_NGX_Result methodResult = evalResult ? NVSDK_NGX_Result_Success : NVSDK_NGX_Result_Fail;
 
     // Root signature restore
-    if (Config::Instance()->RestoreComputeSignature.value_or_default() ||
-        Config::Instance()->RestoreGraphicSignature.value_or_default())
-    {
-        if (Config::Instance()->RestoreComputeSignature.value_or_default())
-            D3D12Hooks::RestoreComputeRoot(InCmdList);
+    if (Config::Instance()->RestoreComputeSignature.value_or_default())
+        D3D12Hooks::RestoreComputeRoot(InCmdList);
 
-        if (Config::Instance()->RestoreGraphicSignature.value_or_default())
-            D3D12Hooks::RestoreGraphicsRootSignature(InCmdList);
-    }
+    if (Config::Instance()->RestoreGraphicSignature.value_or_default())
+        D3D12Hooks::RestoreGraphicsRootSignature(InCmdList);
 
     D3D12Hooks::SetRootSignatureTracking(true);
 

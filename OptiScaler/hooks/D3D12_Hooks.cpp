@@ -74,30 +74,40 @@ using PFN_SetComputeRoot32BitConstants =
 using PFN_SetComputeRoot32BitConstant =
     rewrite_signature<decltype(&ID3D12GraphicsCommandList::SetComputeRoot32BitConstant)>::type;
 
-static PFN_SetComputeRootSignature o_SetComputeRootSignature = nullptr;
-static PFN_SetGraphicsRootSignature o_SetGraphicsRootSignature = nullptr;
-static PFN_SetDescriptorHeaps o_SetDescriptorHeaps = nullptr;
-static PFN_SetPipelineState o_SetPipelineState = nullptr;
-static PFN_SetComputeRootDescriptorTable o_SetComputeRootDescriptorTable = nullptr;
-static PFN_SetComputeRoot32BitConstants o_SetComputeRoot32BitConstants = nullptr;
-static PFN_SetComputeRoot32BitConstant o_SetComputeRoot32BitConstant = nullptr;
+template <typename T> struct RootRestoreHook
+{
+    T o_earlyHook = nullptr;
+    T o_lateHook = nullptr;
 
-static std::atomic_bool hookedLate = false;
-static PFN_SetComputeRootSignature o_SetComputeRootSignatureLate = nullptr;
-static PFN_SetGraphicsRootSignature o_SetGraphicsRootSignatureLate = nullptr;
-static PFN_SetDescriptorHeaps o_SetDescriptorHeapsLate = nullptr;
-static PFN_SetPipelineState o_SetPipelineStateLate = nullptr;
-static PFN_SetComputeRootDescriptorTable o_SetComputeRootDescriptorTableLate = nullptr;
-static PFN_SetComputeRoot32BitConstants o_SetComputeRoot32BitConstantsLate = nullptr;
-static PFN_SetComputeRoot32BitConstant o_SetComputeRoot32BitConstantLate = nullptr;
+    std::shared_mutex mutex {};
+};
+
+static RootRestoreHook<PFN_SetComputeRootSignature> s_SetComputeRootSignature {};
+static RootRestoreHook<PFN_SetGraphicsRootSignature> s_SetGraphicsRootSignature {};
+static RootRestoreHook<PFN_SetDescriptorHeaps> s_SetDescriptorHeaps {};
+static RootRestoreHook<PFN_SetPipelineState> s_SetPipelineState {};
+
+// Those use a common computeRootStatesMutex mutex
+static std::shared_mutex computeRootStatesMutex;
+static RootRestoreHook<PFN_SetComputeRootDescriptorTable> s_SetComputeRootDescriptorTable {};
+static RootRestoreHook<PFN_SetComputeRoot32BitConstants> s_SetComputeRoot32BitConstants {};
+static RootRestoreHook<PFN_SetComputeRoot32BitConstant> s_SetComputeRoot32BitConstant {};
+
+static thread_local bool lateInProgressSetComputeRootSignature = false;
+static thread_local bool lateInProgressSetGraphicsRootSignature = false;
+static thread_local bool lateInProgressSetDescriptorHeaps = false;
+static thread_local bool lateInProgressSetPipelineState = false;
+static thread_local bool lateInProgressSetComputeRootDescriptorTable = false;
+static thread_local bool lateInProgressSetComputeRoot32BitConstants = false;
+static thread_local bool lateInProgressSetComputeRoot32BitConstant = false;
 
 struct DescriptorHeap
 {
-    UINT NumDescriptorHeaps;
+    UINT NumDescriptorHeaps {};
     ID3D12DescriptorHeap* Heaps[2] = { nullptr, nullptr }; // apparently 2 is max
 };
 
-enum class ComputeRootType
+enum class RootEntryType
 {
     Invalid,
     Table,
@@ -107,12 +117,12 @@ enum class ComputeRootType
 
 struct RootState
 {
-    ComputeRootType type = ComputeRootType::Invalid;
+    RootEntryType type = RootEntryType::Invalid;
 
     // Table
-    D3D12_GPU_DESCRIPTOR_HANDLE computeRootDescriptorTable;
+    D3D12_GPU_DESCRIPTOR_HANDLE rootDescriptorTable;
 
-    // Constants
+    // Constants; Constant use Data[0] and DestOffset
     UINT Num32BitValues = 0;
     UINT DestOffset = 0;
     std::vector<uint32_t> Data;
@@ -122,16 +132,10 @@ static ankerl::unordered_dense::map<ID3D12GraphicsCommandList*, ID3D12RootSignat
 static ankerl::unordered_dense::map<ID3D12GraphicsCommandList*, ID3D12RootSignature*> graphicSignatures;
 static ankerl::unordered_dense::map<ID3D12GraphicsCommandList*, DescriptorHeap> descriptorHeaps;
 static ankerl::unordered_dense::map<ID3D12GraphicsCommandList*, ID3D12PipelineState*> pipelineStates;
-static ankerl::unordered_dense::map<ID3D12GraphicsCommandList*, std::vector<RootState>> rootStates;
+static ankerl::unordered_dense::map<ID3D12GraphicsCommandList*, std::vector<RootState>> computeRootStates;
 static ankerl::unordered_dense::map<ID3D12RootSignature*, UINT> rootSigParameterCount;
 
 static bool isUpscalerActive = false;
-
-static std::shared_mutex computeSigatureMutex;
-static std::shared_mutex graphSigatureMutex;
-static std::shared_mutex descriptorHeapsMutex;
-static std::shared_mutex pipelineStatesMutex;
-static std::shared_mutex rootStatesMutex;
 
 // Intel Atomic Extension
 struct UE_D3D12_RESOURCE_DESC
@@ -304,13 +308,13 @@ static void ApplySamplerOverrides(D3D12_STATIC_SAMPLER_DESC1& samplerDesc)
 VALIDATE_HOOK(hkSetPipelineState, PFN_SetPipelineState)
 static void hkSetPipelineState(ID3D12GraphicsCommandList* commandList, ID3D12PipelineState* pPipelineState)
 {
-    if (!hookedLate && !isUpscalerActive && commandList != nullptr && pPipelineState != nullptr)
+    if (!lateInProgressSetPipelineState && !isUpscalerActive && commandList != nullptr && pPipelineState != nullptr)
     {
-        std::unique_lock<std::shared_mutex> lock(pipelineStatesMutex);
+        std::unique_lock<std::shared_mutex> lock(s_SetPipelineState.mutex);
         pipelineStates.insert_or_assign(commandList, pPipelineState);
     }
 
-    o_SetPipelineState(commandList, pPipelineState);
+    s_SetPipelineState.o_earlyHook(commandList, pPipelineState);
 }
 
 UINT GetRootParameterCount(ID3D12RootSignature* pRootSignature)
@@ -322,42 +326,49 @@ UINT GetRootParameterCount(ID3D12RootSignature* pRootSignature)
 VALIDATE_HOOK(hkSetComputeRootSignature, PFN_SetComputeRootSignature)
 static void hkSetComputeRootSignature(ID3D12GraphicsCommandList* commandList, ID3D12RootSignature* pRootSignature)
 {
-    if (!hookedLate && Config::Instance()->RestoreComputeSignature.value_or_default() && !isUpscalerActive &&
-        commandList != nullptr && pRootSignature != nullptr)
+    bool tracking = false;
+
+    if (!lateInProgressSetComputeRootSignature && Config::Instance()->RestoreComputeSignature.value_or_default() &&
+        !isUpscalerActive && commandList != nullptr && pRootSignature != nullptr)
     {
         {
-            std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
-            auto& table = rootStates[commandList];
+            std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
+            auto& table = computeRootStates[commandList];
             table.resize(GetRootParameterCount(pRootSignature));
         }
 
-        std::unique_lock<std::shared_mutex> lock(computeSigatureMutex);
+        std::unique_lock<std::shared_mutex> lock(s_SetComputeRootSignature.mutex);
         computeSignatures.insert_or_assign(commandList, pRootSignature);
+
+        tracking = true;
     }
 
-    o_SetComputeRootSignature(commandList, pRootSignature);
+    LOG_TRACE("Tracking: {}", tracking);
+
+    s_SetComputeRootSignature.o_earlyHook(commandList, pRootSignature);
 }
 
 VALIDATE_HOOK(hkSetGraphicsRootSignature, PFN_SetGraphicsRootSignature)
 static void hkSetGraphicsRootSignature(ID3D12GraphicsCommandList* commandList, ID3D12RootSignature* pRootSignature)
 {
-    if (!hookedLate && Config::Instance()->RestoreGraphicSignature.value_or_default() && !isUpscalerActive &&
-        commandList != nullptr && pRootSignature != nullptr)
+    if (!lateInProgressSetGraphicsRootSignature && Config::Instance()->RestoreGraphicSignature.value_or_default() &&
+        !isUpscalerActive && commandList != nullptr && pRootSignature != nullptr)
     {
-        std::unique_lock<std::shared_mutex> lock(graphSigatureMutex);
+        std::unique_lock<std::shared_mutex> lock(s_SetGraphicsRootSignature.mutex);
         graphicSignatures.insert_or_assign(commandList, pRootSignature);
     }
 
-    o_SetGraphicsRootSignature(commandList, pRootSignature);
+    s_SetGraphicsRootSignature.o_earlyHook(commandList, pRootSignature);
 }
 
 VALIDATE_HOOK(hkSetDescriptorHeaps, PFN_SetDescriptorHeaps)
 static void hkSetDescriptorHeaps(ID3D12GraphicsCommandList* commandList, UINT NumDescriptorHeaps,
                                  ID3D12DescriptorHeap* const* ppDescriptorHeaps)
 {
-    if (!hookedLate && !isUpscalerActive && commandList != nullptr && ppDescriptorHeaps != nullptr)
+    if (!lateInProgressSetDescriptorHeaps && !isUpscalerActive && commandList != nullptr &&
+        ppDescriptorHeaps != nullptr)
     {
-        std::unique_lock<std::shared_mutex> lock(descriptorHeapsMutex);
+        std::unique_lock<std::shared_mutex> lock(s_SetDescriptorHeaps.mutex);
         DescriptorHeap temp {};
         temp.NumDescriptorHeaps = NumDescriptorHeaps;
         for (UINT i = 0; i < NumDescriptorHeaps; ++i)
@@ -367,38 +378,39 @@ static void hkSetDescriptorHeaps(ID3D12GraphicsCommandList* commandList, UINT Nu
         descriptorHeaps.insert_or_assign(commandList, std::move(temp));
     }
 
-    o_SetDescriptorHeaps(commandList, NumDescriptorHeaps, ppDescriptorHeaps);
+    s_SetDescriptorHeaps.o_earlyHook(commandList, NumDescriptorHeaps, ppDescriptorHeaps);
 }
 
 VALIDATE_HOOK(hkSetComputeRootDescriptorTable, PFN_SetComputeRootDescriptorTable)
 static void hkSetComputeRootDescriptorTable(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                             D3D12_GPU_DESCRIPTOR_HANDLE BaseDescriptor)
 {
-    if (!hookedLate && !isUpscalerActive && commandList != nullptr && BaseDescriptor.ptr)
+    if (!lateInProgressSetComputeRootDescriptorTable && !isUpscalerActive && commandList != nullptr &&
+        BaseDescriptor.ptr)
     {
-        std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
-        auto& table = rootStates[commandList];
+        std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
+        auto& table = computeRootStates[commandList];
         if (RootParameterIndex < table.size())
         {
-            table[RootParameterIndex].type = ComputeRootType::Table;
-            table[RootParameterIndex].computeRootDescriptorTable = BaseDescriptor;
+            table[RootParameterIndex].type = RootEntryType::Table;
+            table[RootParameterIndex].rootDescriptorTable = BaseDescriptor;
         }
     }
 
-    o_SetComputeRootDescriptorTable(commandList, RootParameterIndex, BaseDescriptor);
+    s_SetComputeRootDescriptorTable.o_earlyHook(commandList, RootParameterIndex, BaseDescriptor);
 }
 
 VALIDATE_HOOK(hkSetComputeRoot32BitConstants, PFN_SetComputeRoot32BitConstants)
 static void hkSetComputeRoot32BitConstants(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                            UINT Num32BitValuesToSet, const void* pSrcData, UINT DestOffsetIn32BitValues)
 {
-    if (!hookedLate && !isUpscalerActive && commandList != nullptr && pSrcData)
+    if (!lateInProgressSetComputeRoot32BitConstants && !isUpscalerActive && commandList != nullptr && pSrcData)
     {
-        std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
-        auto& table = rootStates[commandList];
+        std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
+        auto& table = computeRootStates[commandList];
         if (RootParameterIndex < table.size())
         {
-            table[RootParameterIndex].type = ComputeRootType::Constants;
+            table[RootParameterIndex].type = RootEntryType::Constants;
             table[RootParameterIndex].Num32BitValues = Num32BitValuesToSet;
             table[RootParameterIndex].DestOffset = DestOffsetIn32BitValues;
             auto* src = static_cast<const uint32_t*>(pSrcData);
@@ -406,81 +418,95 @@ static void hkSetComputeRoot32BitConstants(ID3D12GraphicsCommandList* commandLis
         }
     }
 
-    o_SetComputeRoot32BitConstants(commandList, RootParameterIndex, Num32BitValuesToSet, pSrcData,
-                                   DestOffsetIn32BitValues);
+    s_SetComputeRoot32BitConstants.o_earlyHook(commandList, RootParameterIndex, Num32BitValuesToSet, pSrcData,
+                                               DestOffsetIn32BitValues);
 }
 
 VALIDATE_HOOK(hkSetComputeRoot32BitConstant, PFN_SetComputeRoot32BitConstant)
 static void hkSetComputeRoot32BitConstant(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex, UINT SrcData,
                                           UINT DestOffsetIn32BitValues)
 {
-    if (!hookedLate && !isUpscalerActive && commandList != nullptr)
+    if (!lateInProgressSetComputeRoot32BitConstant && !isUpscalerActive && commandList != nullptr)
     {
-        std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
-        auto& table = rootStates[commandList];
+        std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
+        auto& table = computeRootStates[commandList];
         if (RootParameterIndex < table.size())
         {
-            table[RootParameterIndex].type = ComputeRootType::Constant;
+            table[RootParameterIndex].type = RootEntryType::Constant;
             table[RootParameterIndex].DestOffset = DestOffsetIn32BitValues;
             table[RootParameterIndex].Data.assign(1, SrcData);
         }
     }
 
-    o_SetComputeRoot32BitConstant(commandList, RootParameterIndex, SrcData, DestOffsetIn32BitValues);
+    s_SetComputeRoot32BitConstant.o_earlyHook(commandList, RootParameterIndex, SrcData, DestOffsetIn32BitValues);
 }
 
 // Late hooks, from upscaler eval
 VALIDATE_HOOK(hkSetPipelineStateLate, PFN_SetPipelineState)
 static void hkSetPipelineStateLate(ID3D12GraphicsCommandList* commandList, ID3D12PipelineState* pPipelineState)
 {
+    lateInProgressSetPipelineState = true;
+
     if (!isUpscalerActive && commandList != nullptr && pPipelineState != nullptr)
     {
-        std::unique_lock<std::shared_mutex> lock(pipelineStatesMutex);
+        std::unique_lock<std::shared_mutex> lock(s_SetPipelineState.mutex);
         pipelineStates.insert_or_assign(commandList, pPipelineState);
     }
 
-    o_SetPipelineStateLate(commandList, pPipelineState);
+    s_SetPipelineState.o_lateHook(commandList, pPipelineState);
+
+    lateInProgressSetPipelineState = false;
 }
 
 VALIDATE_HOOK(hkSetComputeRootSignatureLate, PFN_SetComputeRootSignature)
 static void hkSetComputeRootSignatureLate(ID3D12GraphicsCommandList* commandList, ID3D12RootSignature* pRootSignature)
 {
+    lateInProgressSetComputeRootSignature = true;
+
     if (Config::Instance()->RestoreComputeSignature.value_or_default() && !isUpscalerActive && commandList != nullptr &&
         pRootSignature != nullptr)
     {
         {
-            std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
-            auto& table = rootStates[commandList];
+            std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
+            auto& table = computeRootStates[commandList];
             table.resize(GetRootParameterCount(pRootSignature));
         }
 
-        std::unique_lock<std::shared_mutex> lock(computeSigatureMutex);
+        std::unique_lock<std::shared_mutex> lock(s_SetComputeRootSignature.mutex);
         computeSignatures.insert_or_assign(commandList, pRootSignature);
     }
 
-    o_SetComputeRootSignatureLate(commandList, pRootSignature);
+    s_SetComputeRootSignature.o_lateHook(commandList, pRootSignature);
+
+    lateInProgressSetComputeRootSignature = false;
 }
 
 VALIDATE_HOOK(hkSetGraphicsRootSignatureLate, PFN_SetGraphicsRootSignature)
 static void hkSetGraphicsRootSignatureLate(ID3D12GraphicsCommandList* commandList, ID3D12RootSignature* pRootSignature)
 {
+    lateInProgressSetGraphicsRootSignature = true;
+
     if (Config::Instance()->RestoreGraphicSignature.value_or_default() && !isUpscalerActive && commandList != nullptr &&
         pRootSignature != nullptr)
     {
-        std::unique_lock<std::shared_mutex> lock(graphSigatureMutex);
+        std::unique_lock<std::shared_mutex> lock(s_SetGraphicsRootSignature.mutex);
         graphicSignatures.insert_or_assign(commandList, pRootSignature);
     }
 
-    o_SetGraphicsRootSignatureLate(commandList, pRootSignature);
+    s_SetGraphicsRootSignature.o_lateHook(commandList, pRootSignature);
+
+    lateInProgressSetGraphicsRootSignature = false;
 }
 
 VALIDATE_HOOK(hkSetDescriptorHeapsLate, PFN_SetDescriptorHeaps)
 static void hkSetDescriptorHeapsLate(ID3D12GraphicsCommandList* commandList, UINT NumDescriptorHeaps,
                                      ID3D12DescriptorHeap* const* ppDescriptorHeaps)
 {
+    lateInProgressSetDescriptorHeaps = true;
+
     if (!isUpscalerActive && commandList != nullptr && ppDescriptorHeaps != nullptr)
     {
-        std::unique_lock<std::shared_mutex> lock(descriptorHeapsMutex);
+        std::unique_lock<std::shared_mutex> lock(s_SetDescriptorHeaps.mutex);
         DescriptorHeap temp {};
         temp.NumDescriptorHeaps = NumDescriptorHeaps;
         for (UINT i = 0; i < NumDescriptorHeaps; ++i)
@@ -490,25 +516,31 @@ static void hkSetDescriptorHeapsLate(ID3D12GraphicsCommandList* commandList, UIN
         descriptorHeaps.insert_or_assign(commandList, std::move(temp));
     }
 
-    o_SetDescriptorHeapsLate(commandList, NumDescriptorHeaps, ppDescriptorHeaps);
+    s_SetDescriptorHeaps.o_lateHook(commandList, NumDescriptorHeaps, ppDescriptorHeaps);
+
+    lateInProgressSetDescriptorHeaps = false;
 }
 
 VALIDATE_HOOK(hkSetComputeRootDescriptorTableLate, PFN_SetComputeRootDescriptorTable)
 static void hkSetComputeRootDescriptorTableLate(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                                 D3D12_GPU_DESCRIPTOR_HANDLE BaseDescriptor)
 {
+    lateInProgressSetComputeRootDescriptorTable = true;
+
     if (!isUpscalerActive && commandList != nullptr && BaseDescriptor.ptr)
     {
-        std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
-        auto& table = rootStates[commandList];
+        std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
+        auto& table = computeRootStates[commandList];
         if (RootParameterIndex < table.size())
         {
-            table[RootParameterIndex].type = ComputeRootType::Table;
-            table[RootParameterIndex].computeRootDescriptorTable = BaseDescriptor;
+            table[RootParameterIndex].type = RootEntryType::Table;
+            table[RootParameterIndex].rootDescriptorTable = BaseDescriptor;
         }
     }
 
-    o_SetComputeRootDescriptorTableLate(commandList, RootParameterIndex, BaseDescriptor);
+    s_SetComputeRootDescriptorTable.o_lateHook(commandList, RootParameterIndex, BaseDescriptor);
+
+    lateInProgressSetComputeRootDescriptorTable = false;
 }
 
 VALIDATE_HOOK(hkSetComputeRoot32BitConstantsLate, PFN_SetComputeRoot32BitConstants)
@@ -516,13 +548,15 @@ static void hkSetComputeRoot32BitConstantsLate(ID3D12GraphicsCommandList* comman
                                                UINT Num32BitValuesToSet, const void* pSrcData,
                                                UINT DestOffsetIn32BitValues)
 {
+    lateInProgressSetComputeRoot32BitConstants = true;
+
     if (!isUpscalerActive && commandList != nullptr && pSrcData)
     {
-        std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
-        auto& table = rootStates[commandList];
+        std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
+        auto& table = computeRootStates[commandList];
         if (RootParameterIndex < table.size())
         {
-            table[RootParameterIndex].type = ComputeRootType::Constants;
+            table[RootParameterIndex].type = RootEntryType::Constants;
             table[RootParameterIndex].Num32BitValues = Num32BitValuesToSet;
             table[RootParameterIndex].DestOffset = DestOffsetIn32BitValues;
             auto* src = static_cast<const uint32_t*>(pSrcData);
@@ -530,32 +564,38 @@ static void hkSetComputeRoot32BitConstantsLate(ID3D12GraphicsCommandList* comman
         }
     }
 
-    o_SetComputeRoot32BitConstantsLate(commandList, RootParameterIndex, Num32BitValuesToSet, pSrcData,
-                                       DestOffsetIn32BitValues);
+    s_SetComputeRoot32BitConstants.o_lateHook(commandList, RootParameterIndex, Num32BitValuesToSet, pSrcData,
+                                              DestOffsetIn32BitValues);
+
+    lateInProgressSetComputeRoot32BitConstants = false;
 }
 
 VALIDATE_HOOK(hkSetComputeRoot32BitConstantLate, PFN_SetComputeRoot32BitConstant)
 static void hkSetComputeRoot32BitConstantLate(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                               UINT SrcData, UINT DestOffsetIn32BitValues)
 {
+    lateInProgressSetComputeRoot32BitConstant = true;
+
     if (!isUpscalerActive && commandList != nullptr)
     {
-        std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
-        auto& table = rootStates[commandList];
+        std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
+        auto& table = computeRootStates[commandList];
         if (RootParameterIndex < table.size())
         {
-            table[RootParameterIndex].type = ComputeRootType::Constant;
+            table[RootParameterIndex].type = RootEntryType::Constant;
             table[RootParameterIndex].DestOffset = DestOffsetIn32BitValues;
             table[RootParameterIndex].Data.assign(1, SrcData);
         }
     }
 
-    o_SetComputeRoot32BitConstantLate(commandList, RootParameterIndex, SrcData, DestOffsetIn32BitValues);
+    s_SetComputeRoot32BitConstant.o_lateHook(commandList, RootParameterIndex, SrcData, DestOffsetIn32BitValues);
+
+    lateInProgressSetComputeRoot32BitConstant = false;
 }
 
 void D3D12Hooks::HookToCommandListLate(ID3D12GraphicsCommandList* commandList)
 {
-    if (o_SetComputeRootSignatureLate || o_SetGraphicsRootSignatureLate)
+    if (s_SetComputeRootSignature.o_lateHook || s_SetGraphicsRootSignature.o_lateHook)
         return;
 
     // Get the vtable pointer
@@ -563,52 +603,68 @@ void D3D12Hooks::HookToCommandListLate(ID3D12GraphicsCommandList* commandList)
 
     const bool extendedRestoreSignature = Config::Instance()->ExtendedStateRestore.value_or_default();
 
-    o_SetPipelineStateLate = (PFN_SetPipelineState) pVTable[25];
-    o_SetDescriptorHeapsLate = (PFN_SetDescriptorHeaps) pVTable[28];
-    o_SetComputeRootSignatureLate = (PFN_SetComputeRootSignature) pVTable[29];
-    o_SetGraphicsRootSignatureLate = (PFN_SetGraphicsRootSignature) pVTable[30];
-    o_SetComputeRootDescriptorTableLate = (PFN_SetComputeRootDescriptorTable) pVTable[31];
-    o_SetComputeRoot32BitConstantLate = (PFN_SetComputeRoot32BitConstant) pVTable[33];
-    o_SetComputeRoot32BitConstantsLate = (PFN_SetComputeRoot32BitConstants) pVTable[35];
+    s_SetPipelineState.o_lateHook = (PFN_SetPipelineState) pVTable[25];
+    s_SetDescriptorHeaps.o_lateHook = (PFN_SetDescriptorHeaps) pVTable[28];
+    s_SetComputeRootSignature.o_lateHook = (PFN_SetComputeRootSignature) pVTable[29];
+    s_SetGraphicsRootSignature.o_lateHook = (PFN_SetGraphicsRootSignature) pVTable[30];
+    s_SetComputeRootDescriptorTable.o_lateHook = (PFN_SetComputeRootDescriptorTable) pVTable[31];
+    s_SetComputeRoot32BitConstant.o_lateHook = (PFN_SetComputeRoot32BitConstant) pVTable[33];
+    s_SetComputeRoot32BitConstants.o_lateHook = (PFN_SetComputeRoot32BitConstants) pVTable[35];
 
-    if (o_SetPipelineStateLate || o_SetDescriptorHeapsLate || o_SetComputeRootSignatureLate ||
-        o_SetGraphicsRootSignatureLate || o_SetComputeRootDescriptorTableLate || o_SetComputeRoot32BitConstantLate ||
-        o_SetComputeRoot32BitConstantsLate)
+    if (s_SetPipelineState.o_lateHook || s_SetDescriptorHeaps.o_lateHook || s_SetComputeRootSignature.o_lateHook ||
+        s_SetGraphicsRootSignature.o_lateHook || s_SetComputeRootDescriptorTable.o_lateHook ||
+        s_SetComputeRoot32BitConstant.o_lateHook || s_SetComputeRoot32BitConstants.o_lateHook)
     {
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());
 
-        if (o_SetPipelineStateLate != nullptr && extendedRestoreSignature)
-            DetourAttach(&(PVOID&) o_SetPipelineStateLate, hkSetPipelineStateLate);
+        if (s_SetPipelineState.o_lateHook != nullptr && extendedRestoreSignature)
+            DetourAttach(&(PVOID&) s_SetPipelineState.o_lateHook, hkSetPipelineStateLate);
 
-        if (o_SetDescriptorHeapsLate != nullptr && extendedRestoreSignature)
-            DetourAttach(&(PVOID&) o_SetDescriptorHeapsLate, hkSetDescriptorHeapsLate);
+        if (s_SetDescriptorHeaps.o_lateHook != nullptr && extendedRestoreSignature)
+            DetourAttach(&(PVOID&) s_SetDescriptorHeaps.o_lateHook, hkSetDescriptorHeapsLate);
 
-        if (o_SetComputeRootSignatureLate != nullptr)
-            DetourAttach(&(PVOID&) o_SetComputeRootSignatureLate, hkSetComputeRootSignatureLate);
+        if (s_SetComputeRootSignature.o_lateHook != nullptr)
+            DetourAttach(&(PVOID&) s_SetComputeRootSignature.o_lateHook, hkSetComputeRootSignatureLate);
 
-        if (o_SetGraphicsRootSignatureLate != nullptr)
-            DetourAttach(&(PVOID&) o_SetGraphicsRootSignatureLate, hkSetGraphicsRootSignatureLate);
+        if (s_SetGraphicsRootSignature.o_lateHook != nullptr)
+            DetourAttach(&(PVOID&) s_SetGraphicsRootSignature.o_lateHook, hkSetGraphicsRootSignatureLate);
 
-        if (o_SetComputeRootDescriptorTableLate != nullptr && extendedRestoreSignature)
-            DetourAttach(&(PVOID&) o_SetComputeRootDescriptorTableLate, hkSetComputeRootDescriptorTableLate);
+        if (s_SetComputeRootDescriptorTable.o_lateHook != nullptr && extendedRestoreSignature)
+            DetourAttach(&(PVOID&) s_SetComputeRootDescriptorTable.o_lateHook, hkSetComputeRootDescriptorTableLate);
 
-        if (o_SetComputeRoot32BitConstantLate != nullptr && extendedRestoreSignature)
-            DetourAttach(&(PVOID&) o_SetComputeRoot32BitConstantLate, hkSetComputeRoot32BitConstantLate);
+        if (s_SetComputeRoot32BitConstant.o_lateHook != nullptr && extendedRestoreSignature)
+            DetourAttach(&(PVOID&) s_SetComputeRoot32BitConstant.o_lateHook, hkSetComputeRoot32BitConstantLate);
 
-        if (o_SetComputeRoot32BitConstantsLate != nullptr && extendedRestoreSignature)
-            DetourAttach(&(PVOID&) o_SetComputeRoot32BitConstantsLate, hkSetComputeRoot32BitConstantsLate);
+        if (s_SetComputeRoot32BitConstants.o_lateHook != nullptr && extendedRestoreSignature)
+            DetourAttach(&(PVOID&) s_SetComputeRoot32BitConstants.o_lateHook, hkSetComputeRoot32BitConstantsLate);
 
-        LOG_DEBUG("Hooked SetRootSignature functions Late");
-        hookedLate = true;
+        if (DetourTransactionCommit() == NO_ERROR)
+        {
+            LOG_DEBUG("Hooked RootSignature functions Late");
+        }
+        else
+        {
+            s_SetPipelineState.o_lateHook = nullptr;
+            s_SetDescriptorHeaps.o_lateHook = nullptr;
+            s_SetComputeRootSignature.o_lateHook = nullptr;
+            s_SetGraphicsRootSignature.o_lateHook = nullptr;
+            s_SetComputeRootDescriptorTable.o_lateHook = nullptr;
+            s_SetComputeRoot32BitConstant.o_lateHook = nullptr;
+            s_SetComputeRoot32BitConstants.o_lateHook = nullptr;
 
-        DetourTransactionCommit();
+            LOG_WARN("Hooking RootSignature Late failed");
+        }
+    }
+    else
+    {
+        LOG_WARN("Late hooks into RootSignature are nullptr");
     }
 }
 
 static void HookToCommandList(ID3D12Device* InDevice)
 {
-    if (o_SetComputeRootSignature != nullptr || o_SetGraphicsRootSignature != nullptr)
+    if (s_SetComputeRootSignature.o_earlyHook != nullptr || s_SetGraphicsRootSignature.o_earlyHook != nullptr)
         return;
 
     ID3D12GraphicsCommandList* commandList = nullptr;
@@ -624,44 +680,64 @@ static void HookToCommandList(ID3D12Device* InDevice)
 
             const bool extendedRestoreSignature = Config::Instance()->ExtendedStateRestore.value_or_default();
 
-            o_SetPipelineState = (PFN_SetPipelineState) pVTable[25];
-            o_SetDescriptorHeaps = (PFN_SetDescriptorHeaps) pVTable[28];
-            o_SetComputeRootSignature = (PFN_SetComputeRootSignature) pVTable[29];
-            o_SetGraphicsRootSignature = (PFN_SetGraphicsRootSignature) pVTable[30];
-            o_SetComputeRootDescriptorTable = (PFN_SetComputeRootDescriptorTable) pVTable[31];
-            o_SetComputeRoot32BitConstant = (PFN_SetComputeRoot32BitConstant) pVTable[33];
-            o_SetComputeRoot32BitConstants = (PFN_SetComputeRoot32BitConstants) pVTable[35];
+            s_SetPipelineState.o_earlyHook = (PFN_SetPipelineState) pVTable[25];
+            s_SetDescriptorHeaps.o_earlyHook = (PFN_SetDescriptorHeaps) pVTable[28];
+            s_SetComputeRootSignature.o_earlyHook = (PFN_SetComputeRootSignature) pVTable[29];
+            s_SetGraphicsRootSignature.o_earlyHook = (PFN_SetGraphicsRootSignature) pVTable[30];
+            s_SetComputeRootDescriptorTable.o_earlyHook = (PFN_SetComputeRootDescriptorTable) pVTable[31];
+            s_SetComputeRoot32BitConstant.o_earlyHook = (PFN_SetComputeRoot32BitConstant) pVTable[33];
+            s_SetComputeRoot32BitConstants.o_earlyHook = (PFN_SetComputeRoot32BitConstants) pVTable[35];
 
-            if (o_SetPipelineState || o_SetDescriptorHeaps || o_SetComputeRootSignature || o_SetGraphicsRootSignature ||
-                o_SetComputeRootDescriptorTable || o_SetComputeRoot32BitConstant || o_SetComputeRoot32BitConstants)
+            if (s_SetPipelineState.o_earlyHook || s_SetDescriptorHeaps.o_earlyHook ||
+                s_SetComputeRootSignature.o_earlyHook || s_SetGraphicsRootSignature.o_earlyHook ||
+                s_SetComputeRootDescriptorTable.o_earlyHook || s_SetComputeRoot32BitConstant.o_earlyHook ||
+                s_SetComputeRoot32BitConstants.o_earlyHook)
             {
                 DetourTransactionBegin();
                 DetourUpdateThread(GetCurrentThread());
 
-                if (o_SetPipelineState != nullptr && extendedRestoreSignature)
-                    DetourAttach(&(PVOID&) o_SetPipelineState, hkSetPipelineState);
+                if (s_SetPipelineState.o_earlyHook != nullptr && extendedRestoreSignature)
+                    DetourAttach(&(PVOID&) s_SetPipelineState.o_earlyHook, hkSetPipelineState);
 
-                if (o_SetDescriptorHeaps != nullptr && extendedRestoreSignature)
-                    DetourAttach(&(PVOID&) o_SetDescriptorHeaps, hkSetDescriptorHeaps);
+                if (s_SetDescriptorHeaps.o_earlyHook != nullptr && extendedRestoreSignature)
+                    DetourAttach(&(PVOID&) s_SetDescriptorHeaps.o_earlyHook, hkSetDescriptorHeaps);
 
-                if (o_SetComputeRootSignature != nullptr)
-                    DetourAttach(&(PVOID&) o_SetComputeRootSignature, hkSetComputeRootSignature);
+                if (s_SetComputeRootSignature.o_earlyHook != nullptr)
+                    DetourAttach(&(PVOID&) s_SetComputeRootSignature.o_earlyHook, hkSetComputeRootSignature);
 
-                if (o_SetGraphicsRootSignature != nullptr)
-                    DetourAttach(&(PVOID&) o_SetGraphicsRootSignature, hkSetGraphicsRootSignature);
+                if (s_SetGraphicsRootSignature.o_earlyHook != nullptr)
+                    DetourAttach(&(PVOID&) s_SetGraphicsRootSignature.o_earlyHook, hkSetGraphicsRootSignature);
 
-                if (o_SetComputeRootDescriptorTable != nullptr && extendedRestoreSignature)
-                    DetourAttach(&(PVOID&) o_SetComputeRootDescriptorTable, hkSetComputeRootDescriptorTable);
+                if (s_SetComputeRootDescriptorTable.o_earlyHook != nullptr && extendedRestoreSignature)
+                    DetourAttach(&(PVOID&) s_SetComputeRootDescriptorTable.o_earlyHook,
+                                 hkSetComputeRootDescriptorTable);
 
-                if (o_SetComputeRoot32BitConstant != nullptr && extendedRestoreSignature)
-                    DetourAttach(&(PVOID&) o_SetComputeRoot32BitConstant, hkSetComputeRoot32BitConstant);
+                if (s_SetComputeRoot32BitConstant.o_earlyHook != nullptr && extendedRestoreSignature)
+                    DetourAttach(&(PVOID&) s_SetComputeRoot32BitConstant.o_earlyHook, hkSetComputeRoot32BitConstant);
 
-                if (o_SetComputeRoot32BitConstants != nullptr && extendedRestoreSignature)
-                    DetourAttach(&(PVOID&) o_SetComputeRoot32BitConstants, hkSetComputeRoot32BitConstants);
+                if (s_SetComputeRoot32BitConstants.o_earlyHook != nullptr && extendedRestoreSignature)
+                    DetourAttach(&(PVOID&) s_SetComputeRoot32BitConstants.o_earlyHook, hkSetComputeRoot32BitConstants);
 
-                LOG_DEBUG("Hooked SetRootSignature functions");
+                if (DetourTransactionCommit() == NO_ERROR)
+                {
+                    LOG_DEBUG("Hooked RootSignature functions");
+                }
+                else
+                {
+                    s_SetPipelineState.o_earlyHook = nullptr;
+                    s_SetDescriptorHeaps.o_earlyHook = nullptr;
+                    s_SetComputeRootSignature.o_earlyHook = nullptr;
+                    s_SetGraphicsRootSignature.o_earlyHook = nullptr;
+                    s_SetComputeRootDescriptorTable.o_earlyHook = nullptr;
+                    s_SetComputeRoot32BitConstant.o_earlyHook = nullptr;
+                    s_SetComputeRoot32BitConstants.o_earlyHook = nullptr;
 
-                DetourTransactionCommit();
+                    LOG_WARN("Hooking RootSignature failed");
+                }
+            }
+            else
+            {
+                LOG_WARN("Early hooks into RootSignature are nullptr");
             }
 
             commandList->Close();
@@ -678,16 +754,16 @@ static void UnhookAll()
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
 
-    if (o_SetComputeRootSignature != nullptr)
+    if (s_SetComputeRootSignature.o_earlyHook != nullptr)
     {
-        DetourDetach(&(PVOID&) o_SetComputeRootSignature, hkSetComputeRootSignature);
-        o_SetComputeRootSignature = nullptr;
+        DetourDetach(&(PVOID&) s_SetComputeRootSignature.o_earlyHook, hkSetComputeRootSignature);
+        s_SetComputeRootSignature.o_earlyHook = nullptr;
     }
 
-    if (o_SetGraphicsRootSignature != nullptr)
+    if (s_SetGraphicsRootSignature.o_earlyHook != nullptr)
     {
-        DetourDetach(&(PVOID&) o_SetGraphicsRootSignature, hkSetGraphicsRootSignature);
-        o_SetGraphicsRootSignature = nullptr;
+        DetourDetach(&(PVOID&) s_SetGraphicsRootSignature.o_earlyHook, hkSetGraphicsRootSignature);
+        s_SetGraphicsRootSignature.o_earlyHook = nullptr;
     }
 
     DetourTransactionCommit();
@@ -1302,7 +1378,7 @@ static HRESULT hkCreateRootSignature(ID3D12Device* device, UINT nodeMask, const 
 
         if (SUCCEEDED(result))
         {
-            std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
+            std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
             if (desc->Version == D3D_ROOT_SIGNATURE_VERSION_1_0)
             {
                 rootSigParameterCount.insert_or_assign((ID3D12RootSignature*) *ppvRootSignature,
@@ -1335,7 +1411,7 @@ static HRESULT hkCreateRootSignature(ID3D12Device* device, UINT nodeMask, const 
     if (descCopy.Version == D3D_ROOT_SIGNATURE_VERSION_1_0)
     {
         {
-            std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
+            std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
             rootSigParameterCount.insert_or_assign((ID3D12RootSignature*) *ppvRootSignature,
                                                    desc->Desc_1_0.NumParameters);
         }
@@ -1354,7 +1430,7 @@ static HRESULT hkCreateRootSignature(ID3D12Device* device, UINT nodeMask, const 
     else if (descCopy.Version == D3D_ROOT_SIGNATURE_VERSION_1_1)
     {
         {
-            std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
+            std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
             rootSigParameterCount.insert_or_assign((ID3D12RootSignature*) *ppvRootSignature,
                                                    desc->Desc_1_1.NumParameters);
         }
@@ -1373,7 +1449,7 @@ static HRESULT hkCreateRootSignature(ID3D12Device* device, UINT nodeMask, const 
     else if (descCopy.Version == D3D_ROOT_SIGNATURE_VERSION_1_2)
     {
         {
-            std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
+            std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
             rootSigParameterCount.insert_or_assign((ID3D12RootSignature*) *ppvRootSignature,
                                                    desc->Desc_1_2.NumParameters);
         }
@@ -1663,7 +1739,7 @@ void D3D12Hooks::SetRootSignatureTracking(bool enable) { isUpscalerActive = !ena
 
 bool D3D12Hooks::CanRestoreComputeRootSignature(ID3D12GraphicsCommandList* cmdList)
 {
-    std::unique_lock<std::shared_mutex> lock(computeSigatureMutex);
+    std::unique_lock<std::shared_mutex> lock(s_SetComputeRootSignature.mutex);
     return computeSignatures.contains(cmdList);
 }
 
@@ -1674,17 +1750,17 @@ bool D3D12Hooks::CanRestoreGraphicsRootSignature(ID3D12GraphicsCommandList* cmdL
 
 bool D3D12Hooks::RestoreDescriptorHeaps(ID3D12GraphicsCommandList* cmdList)
 {
-    std::unique_lock<std::shared_mutex> lock(descriptorHeapsMutex);
+    std::unique_lock<std::shared_mutex> lock(s_SetDescriptorHeaps.mutex);
     if (descriptorHeaps.contains(cmdList))
     {
         auto& heaps = descriptorHeaps[cmdList];
 
         if (heaps.NumDescriptorHeaps > 0 && heaps.Heaps[0] != nullptr)
         {
-            if (o_SetDescriptorHeapsLate)
-                o_SetDescriptorHeapsLate(cmdList, heaps.NumDescriptorHeaps, heaps.Heaps);
-            else if (o_SetDescriptorHeaps)
-                o_SetDescriptorHeaps(cmdList, heaps.NumDescriptorHeaps, heaps.Heaps);
+            if (s_SetDescriptorHeaps.o_lateHook)
+                s_SetDescriptorHeaps.o_lateHook(cmdList, heaps.NumDescriptorHeaps, heaps.Heaps);
+            else if (s_SetDescriptorHeaps.o_earlyHook)
+                s_SetDescriptorHeaps.o_earlyHook(cmdList, heaps.NumDescriptorHeaps, heaps.Heaps);
             else
             {
                 LOG_ERROR("Couldn't restore DescriptorHeaps, no original SetDescriptorHeaps");
@@ -1700,15 +1776,15 @@ bool D3D12Hooks::RestoreDescriptorHeaps(ID3D12GraphicsCommandList* cmdList)
 
 bool D3D12Hooks::RestorePipelineState(ID3D12GraphicsCommandList* cmdList)
 {
-    std::unique_lock<std::shared_mutex> lock(pipelineStatesMutex);
+    std::unique_lock<std::shared_mutex> lock(s_SetPipelineState.mutex);
     if (pipelineStates.contains(cmdList))
     {
         auto& pipelineState = pipelineStates[cmdList];
 
-        if (o_SetPipelineStateLate)
-            o_SetPipelineStateLate(cmdList, pipelineState);
-        else if (o_SetPipelineState)
-            o_SetPipelineState(cmdList, pipelineState);
+        if (s_SetPipelineState.o_lateHook)
+            s_SetPipelineState.o_lateHook(cmdList, pipelineState);
+        else if (s_SetPipelineState.o_earlyHook)
+            s_SetPipelineState.o_earlyHook(cmdList, pipelineState);
         else
         {
             LOG_ERROR("Couldn't restore PipelineState, no original SetPipelineState");
@@ -1723,49 +1799,49 @@ bool D3D12Hooks::RestorePipelineState(ID3D12GraphicsCommandList* cmdList)
 
 bool D3D12Hooks::RestoreComputeRootState(ID3D12GraphicsCommandList* cmdList)
 {
-    std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
-    if (rootStates.contains(cmdList))
+    std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
+    if (computeRootStates.contains(cmdList))
     {
-        auto& table = rootStates[cmdList];
+        auto& table = computeRootStates[cmdList];
 
         for (uint32_t i = 0; i < table.size(); i++)
         {
-            if (table[i].type == ComputeRootType::Table)
+            if (table[i].type == RootEntryType::Table)
             {
-                if (o_SetComputeRootDescriptorTableLate)
-                    o_SetComputeRootDescriptorTableLate(cmdList, i, table[i].computeRootDescriptorTable);
-                else if (o_SetComputeRootDescriptorTable)
-                    o_SetComputeRootDescriptorTable(cmdList, i, table[i].computeRootDescriptorTable);
+                if (s_SetComputeRootDescriptorTable.o_lateHook)
+                    s_SetComputeRootDescriptorTable.o_lateHook(cmdList, i, table[i].rootDescriptorTable);
+                else if (s_SetComputeRootDescriptorTable.o_earlyHook)
+                    s_SetComputeRootDescriptorTable.o_earlyHook(cmdList, i, table[i].rootDescriptorTable);
                 else
                     LOG_ERROR("Couldn't restore ComputeRootDescriptorTable, no original SetComputeRootDescriptorTable");
             }
-            else if (table[i].type == ComputeRootType::Constant)
+            else if (table[i].type == RootEntryType::Constant)
             {
-                if (o_SetComputeRoot32BitConstantLate)
-                    o_SetComputeRoot32BitConstantLate(cmdList, i, table[i].Data[0], table[i].DestOffset);
-                else if (o_SetComputeRoot32BitConstant)
-                    o_SetComputeRoot32BitConstant(cmdList, i, table[i].Data[0], table[i].DestOffset);
+                if (s_SetComputeRoot32BitConstant.o_lateHook)
+                    s_SetComputeRoot32BitConstant.o_lateHook(cmdList, i, table[i].Data[0], table[i].DestOffset);
+                else if (s_SetComputeRoot32BitConstant.o_earlyHook)
+                    s_SetComputeRoot32BitConstant.o_earlyHook(cmdList, i, table[i].Data[0], table[i].DestOffset);
                 else
                     LOG_ERROR("Couldn't restore ComputeRoot32BitConstant, no original SetComputeRoot32BitConstant");
             }
-            else if (table[i].type == ComputeRootType::Constants)
+            else if (table[i].type == RootEntryType::Constants)
             {
-                if (o_SetComputeRoot32BitConstantsLate)
+                if (s_SetComputeRoot32BitConstants.o_lateHook)
                 {
-                    o_SetComputeRoot32BitConstantsLate(cmdList, i, table[i].Num32BitValues, table[i].Data.data(),
-                                                       table[i].DestOffset);
+                    s_SetComputeRoot32BitConstants.o_lateHook(cmdList, i, table[i].Num32BitValues, table[i].Data.data(),
+                                                              table[i].DestOffset);
                 }
-                else if (o_SetComputeRoot32BitConstants)
+                else if (s_SetComputeRoot32BitConstants.o_earlyHook)
                 {
-                    o_SetComputeRoot32BitConstants(cmdList, i, table[i].Num32BitValues, table[i].Data.data(),
-                                                   table[i].DestOffset);
+                    s_SetComputeRoot32BitConstants.o_earlyHook(cmdList, i, table[i].Num32BitValues,
+                                                               table[i].Data.data(), table[i].DestOffset);
                 }
                 else
                 {
                     LOG_ERROR("Couldn't restore ComputeRoot32BitConstants, no original SetComputeRoot32BitConstants");
                 }
             }
-            else if (table[i].type == ComputeRootType::Invalid)
+            else if (table[i].type == RootEntryType::Invalid)
             {
                 LOG_WARN("Can't restore index: {} for CmdList: {:X}", i, (UINT64) cmdList);
             }
@@ -1783,10 +1859,10 @@ void D3D12Hooks::RestoreComputeRootSignature(ID3D12GraphicsCommandList* cmdList)
     auto signature = computeSignatures[cmdList];
     LOG_TRACE("Restore ComputeRootSig: {:X}, for CmdList: {:X}", (UINT64) signature, (UINT64) cmdList);
 
-    if (o_SetComputeRootSignatureLate)
-        o_SetComputeRootSignatureLate(cmdList, signature);
-    else if (o_SetComputeRootSignature)
-        o_SetComputeRootSignature(cmdList, signature);
+    if (s_SetComputeRootSignature.o_lateHook)
+        s_SetComputeRootSignature.o_lateHook(cmdList, signature);
+    else if (s_SetComputeRootSignature.o_earlyHook)
+        s_SetComputeRootSignature.o_earlyHook(cmdList, signature);
     else
         LOG_ERROR("Couldn't restore ComputeRootSignature, no original SetComputeRootSignature");
 }
@@ -1797,7 +1873,7 @@ void D3D12Hooks::RestoreComputeRoot(ID3D12GraphicsCommandList* cmdList)
     {
         // Restoring root signature is the most important and a key element
         // Don't restore anything if we can't restore that
-        std::unique_lock<std::shared_mutex> lock(computeSigatureMutex);
+        std::unique_lock<std::shared_mutex> lock(s_SetComputeRootSignature.mutex);
         if (computeSignatures.contains(cmdList))
         {
             const bool extendedRestoreSignature = Config::Instance()->ExtendedStateRestore.value_or_default();
@@ -1843,10 +1919,13 @@ void D3D12Hooks::RestoreGraphicsRootSignature(ID3D12GraphicsCommandList* cmdList
 
         auto signature = graphicSignatures[cmdList];
         LOG_TRACE("Restore GraphicsRootSig: {:X}, for CmdList: {:X}", (UINT64) signature, (UINT64) cmdList);
-        if (o_SetGraphicsRootSignatureLate)
-            o_SetGraphicsRootSignatureLate(cmdList, signature);
+
+        if (s_SetGraphicsRootSignature.o_lateHook)
+            s_SetGraphicsRootSignature.o_lateHook(cmdList, signature);
+        else if (s_SetGraphicsRootSignature.o_earlyHook)
+            s_SetGraphicsRootSignature.o_earlyHook(cmdList, signature);
         else
-            o_SetGraphicsRootSignature(cmdList, signature);
+            LOG_ERROR("Couldn't restore GraphicsRootSignature, no original SetGraphicsRootSignature");
 
         if (extendedRestoreSignature)
         {
