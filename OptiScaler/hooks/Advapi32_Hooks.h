@@ -772,5 +772,7 @@ static void unhookAdvapi32()
         o_RegCloseKey = nullptr;
         o_RegEnumValueW = nullptr;
         o_RegOpenKeyExW = nullptr;
+        o_RegQueryValueExA = nullptr;
+        o_RegQueryValueExW = nullptr;
     }
 }
