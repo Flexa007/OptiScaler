@@ -183,6 +183,12 @@ void CheckForGPU()
                 {
                     LOG_DEBUG("RDNA4 GPU detected");
                     State::Instance().isRunningOnRDNA4 = true;
+
+                    if (!Config::Instance()->Dx12Upscaler.has_value())
+                    {
+                        LOG_INFO("Setting Dx12Upscaler to fsr31 because RDNA4 GPU is detected");
+                        Config::Instance()->Dx12Upscaler.set_volatile_value("fsr31");
+                    }
                 }
             }
         }
