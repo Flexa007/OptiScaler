@@ -86,6 +86,8 @@ template <typename T> struct RootRestoreHook
     T o_lateHook = nullptr;
 
     std::shared_mutex mutex {};
+
+    T GetHook() const { return o_lateHook ? o_lateHook : o_earlyHook; };
 };
 
 static RootRestoreHook<PFN_SetComputeRootSignature> s_SetComputeRootSignature {};
@@ -1964,10 +1966,10 @@ bool D3D12Hooks::RestoreDescriptorHeaps(ID3D12GraphicsCommandList* cmdList)
 
         if (heaps.NumDescriptorHeaps > 0 && heaps.Heaps[0] != nullptr)
         {
-            if (s_SetDescriptorHeaps.o_lateHook)
-                s_SetDescriptorHeaps.o_lateHook(cmdList, heaps.NumDescriptorHeaps, heaps.Heaps);
-            else if (s_SetDescriptorHeaps.o_earlyHook)
-                s_SetDescriptorHeaps.o_earlyHook(cmdList, heaps.NumDescriptorHeaps, heaps.Heaps);
+            if (auto hook = s_SetDescriptorHeaps.GetHook())
+            {
+                hook(cmdList, heaps.NumDescriptorHeaps, heaps.Heaps);
+            }
             else
             {
                 LOG_ERROR("Couldn't restore DescriptorHeaps, no original SetDescriptorHeaps");
@@ -1988,10 +1990,10 @@ bool D3D12Hooks::RestorePipelineState(ID3D12GraphicsCommandList* cmdList)
     {
         auto& pipelineState = pipelineStates[cmdList];
 
-        if (s_SetPipelineState.o_lateHook)
-            s_SetPipelineState.o_lateHook(cmdList, pipelineState);
-        else if (s_SetPipelineState.o_earlyHook)
-            s_SetPipelineState.o_earlyHook(cmdList, pipelineState);
+        if (auto hook = s_SetPipelineState.GetHook())
+        {
+            hook(cmdList, pipelineState);
+        }
         else
         {
             LOG_ERROR("Couldn't restore PipelineState, no original SetPipelineState");
@@ -2015,33 +2017,23 @@ bool D3D12Hooks::RestoreComputeRootState(ID3D12GraphicsCommandList* cmdList)
         {
             if (table[i].type == RootEntryType::Table)
             {
-                if (s_SetComputeRootDescriptorTable.o_lateHook)
-                    s_SetComputeRootDescriptorTable.o_lateHook(cmdList, i, table[i].rootDescriptorTable);
-                else if (s_SetComputeRootDescriptorTable.o_earlyHook)
-                    s_SetComputeRootDescriptorTable.o_earlyHook(cmdList, i, table[i].rootDescriptorTable);
+                if (auto hook = s_SetComputeRootDescriptorTable.GetHook())
+                    hook(cmdList, i, table[i].rootDescriptorTable);
                 else
                     LOG_ERROR("Couldn't restore ComputeRootDescriptorTable, no original SetComputeRootDescriptorTable");
             }
             else if (table[i].type == RootEntryType::Constant)
             {
-                if (s_SetComputeRoot32BitConstant.o_lateHook)
-                    s_SetComputeRoot32BitConstant.o_lateHook(cmdList, i, table[i].Data[0], table[i].DestOffset);
-                else if (s_SetComputeRoot32BitConstant.o_earlyHook)
-                    s_SetComputeRoot32BitConstant.o_earlyHook(cmdList, i, table[i].Data[0], table[i].DestOffset);
+                if (auto hook = s_SetComputeRoot32BitConstant.GetHook())
+                    hook(cmdList, i, table[i].Data[0], table[i].DestOffset);
                 else
                     LOG_ERROR("Couldn't restore ComputeRoot32BitConstant, no original SetComputeRoot32BitConstant");
             }
             else if (table[i].type == RootEntryType::Constants)
             {
-                if (s_SetComputeRoot32BitConstants.o_lateHook)
+                if (auto hook = s_SetComputeRoot32BitConstants.GetHook())
                 {
-                    s_SetComputeRoot32BitConstants.o_lateHook(cmdList, i, table[i].Num32BitValues, table[i].Data.data(),
-                                                              table[i].DestOffset);
-                }
-                else if (s_SetComputeRoot32BitConstants.o_earlyHook)
-                {
-                    s_SetComputeRoot32BitConstants.o_earlyHook(cmdList, i, table[i].Num32BitValues,
-                                                               table[i].Data.data(), table[i].DestOffset);
+                    hook(cmdList, i, table[i].Num32BitValues, table[i].Data.data(), table[i].DestOffset);
                 }
                 else
                 {
@@ -2050,28 +2042,22 @@ bool D3D12Hooks::RestoreComputeRootState(ID3D12GraphicsCommandList* cmdList)
             }
             else if (table[i].type == RootEntryType::CBV)
             {
-                if (s_SetComputeRootConstantBufferView.o_lateHook)
-                    s_SetComputeRootConstantBufferView.o_lateHook(cmdList, i, table[i].bufferLocation);
-                else if (s_SetComputeRootConstantBufferView.o_earlyHook)
-                    s_SetComputeRootConstantBufferView.o_earlyHook(cmdList, i, table[i].bufferLocation);
+                if (auto hook = s_SetComputeRootConstantBufferView.GetHook())
+                    hook(cmdList, i, table[i].bufferLocation);
                 else
                     LOG_ERROR("Couldn't restore ComputeRoot CBV, no original SetComputeRootConstantBufferView");
             }
             else if (table[i].type == RootEntryType::SRV)
             {
-                if (s_SetComputeRootShaderResourceView.o_lateHook)
-                    s_SetComputeRootShaderResourceView.o_lateHook(cmdList, i, table[i].bufferLocation);
-                else if (s_SetComputeRootShaderResourceView.o_earlyHook)
-                    s_SetComputeRootShaderResourceView.o_earlyHook(cmdList, i, table[i].bufferLocation);
+                if (auto hook = s_SetComputeRootShaderResourceView.GetHook())
+                    hook(cmdList, i, table[i].bufferLocation);
                 else
                     LOG_ERROR("Couldn't restore ComputeRoot SRV, no original SetComputeRootShaderResourceView");
             }
             else if (table[i].type == RootEntryType::UAV)
             {
-                if (s_SetComputeRootUnorderedAccessView.o_lateHook)
-                    s_SetComputeRootUnorderedAccessView.o_lateHook(cmdList, i, table[i].bufferLocation);
-                else if (s_SetComputeRootUnorderedAccessView.o_earlyHook)
-                    s_SetComputeRootUnorderedAccessView.o_earlyHook(cmdList, i, table[i].bufferLocation);
+                if (auto hook = s_SetComputeRootUnorderedAccessView.GetHook())
+                    hook(cmdList, i, table[i].bufferLocation);
                 else
                     LOG_ERROR("Couldn't restore ComputeRoot UAV, no original SetComputeRootUnorderedAccessView");
             }
@@ -2093,10 +2079,8 @@ void D3D12Hooks::RestoreComputeRootSignature(ID3D12GraphicsCommandList* cmdList)
     auto signature = computeSignatures[cmdList];
     LOG_TRACE("Restore ComputeRootSig: {:X}, for CmdList: {:X}", (UINT64) signature, (UINT64) cmdList);
 
-    if (s_SetComputeRootSignature.o_lateHook)
-        s_SetComputeRootSignature.o_lateHook(cmdList, signature);
-    else if (s_SetComputeRootSignature.o_earlyHook)
-        s_SetComputeRootSignature.o_earlyHook(cmdList, signature);
+    if (auto hook = s_SetComputeRootSignature.GetHook())
+        hook(cmdList, signature);
     else
         LOG_ERROR("Couldn't restore ComputeRootSignature, no original SetComputeRootSignature");
 }
@@ -2154,10 +2138,8 @@ void D3D12Hooks::RestoreGraphicsRootSignature(ID3D12GraphicsCommandList* cmdList
         auto signature = graphicSignatures[cmdList];
         LOG_TRACE("Restore GraphicsRootSig: {:X}, for CmdList: {:X}", (UINT64) signature, (UINT64) cmdList);
 
-        if (s_SetGraphicsRootSignature.o_lateHook)
-            s_SetGraphicsRootSignature.o_lateHook(cmdList, signature);
-        else if (s_SetGraphicsRootSignature.o_earlyHook)
-            s_SetGraphicsRootSignature.o_earlyHook(cmdList, signature);
+        if (auto hook = s_SetGraphicsRootSignature.GetHook())
+            hook(cmdList, signature);
         else
             LOG_ERROR("Couldn't restore GraphicsRootSignature, no original SetGraphicsRootSignature");
 
