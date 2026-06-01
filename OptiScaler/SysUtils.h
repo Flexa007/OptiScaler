@@ -64,6 +64,10 @@
 // Use vkQueueSubmit2KHR instead of vkQueueSubmit for testing Linux issue
 // #define USE_QUEUE_SUBMIT_2_KHR
 
+// Don't skip spoofing for XeSS features
+// Which would ONLY disable XMX when using spoofing
+// #define DONT_USE_XMX
+
 inline HMODULE dllModule = nullptr;
 inline HMODULE exeModule = nullptr;
 inline HMODULE originalModule = nullptr;

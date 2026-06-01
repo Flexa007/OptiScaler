@@ -74,7 +74,9 @@ bool XeSSFeature_Dx11::Init(ID3D11Device* InDevice, ID3D11DeviceContext* InConte
     DeviceContext = InContext;
 
     {
+#ifndef DONT_USE_XMX
         ScopedSkipSpoofing skipSpoofing {};
+#endif // !DONT_USE_XMX
 
         auto ret = XeSSProxy::D3D11CreateContext()(InDevice, &_xessContext);
 
