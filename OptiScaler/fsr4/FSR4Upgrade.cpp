@@ -186,8 +186,23 @@ void CheckForGPU()
 
                     if (!Config::Instance()->Dx12Upscaler.has_value())
                     {
-                        LOG_INFO("Setting Dx12Upscaler to fsr31 because RDNA4 GPU is detected");
-                        Config::Instance()->Dx12Upscaler.set_volatile_value("fsr31");
+                        if (State::Instance().WindowsVer == WindowsVersion::Windows11)
+                        {
+                            LOG_INFO("Setting Dx12Upscaler to fsr31 because RDNA4 GPU is detected");
+                            Config::Instance()->Dx12Upscaler.set_volatile_value("fsr31");
+                        }
+                        else
+                        {
+                            if (KernelBaseProxy::GetModuleHandleW_()(L"D3D12Core.dll") != nullptr)
+                            {
+                                LOG_INFO("Setting Dx12Upscaler to fsr31 because RDNA4 GPU is detected");
+                                Config::Instance()->Dx12Upscaler.set_volatile_value("fsr31");
+                            }
+                            else
+                            {
+                                LOG_WARN("RDNA4 GPU is detected but Agility SDK is not detected!");
+                            }
+                        }
                     }
                 }
             }

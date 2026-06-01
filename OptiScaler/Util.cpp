@@ -97,19 +97,46 @@ std::string Util::GetWindowsName(const OSVERSIONINFOW& os)
     DWORD build = os.dwBuildNumber;
 
     if (major == 10 && build >= 22000)
+    {
+        State::Instance().WindowsVer = WindowsVersion::Windows11;
         return "Windows 11";
+    }
+
     if (major == 10)
+    {
+        State::Instance().WindowsVer = WindowsVersion::Windows10;
         return "Windows 10";
+    }
+
     if (major == 6 && minor == 3)
+    {
+        State::Instance().WindowsVer = WindowsVersion::Windows8_1;
         return "Windows 8.1";
+    }
+
     if (major == 6 && minor == 2)
+    {
+        State::Instance().WindowsVer = WindowsVersion::Windows8;
         return "Windows 8";
+    }
+
     if (major == 6 && minor == 1)
+    {
+        State::Instance().WindowsVer = WindowsVersion::Windows7;
         return "Windows 7";
+    }
+
     if (major == 6 && minor == 0)
+    {
+        State::Instance().WindowsVer = WindowsVersion::WindowsVista;
         return "Windows Vista";
+    }
+
     if (major == 5 && minor == 1)
+    {
+        State::Instance().WindowsVer = WindowsVersion::WindowsXP;
         return "Windows XP";
+    }
 
     return "Unknown Windows Version";
 }

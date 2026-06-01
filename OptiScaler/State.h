@@ -10,6 +10,18 @@
 #include <ankerl/unordered_dense.h>
 #include <mutex>
 
+typedef enum WindowsVersion
+{
+    Unknown = 0,
+    WindowsXP,
+    WindowsVista,
+    Windows7,
+    Windows8,
+    Windows8_1,
+    Windows10,
+    Windows11,
+} WindowsVersion;
+
 typedef enum API
 {
     NotSelected = 0,
@@ -89,6 +101,7 @@ class State
     std::string GameVersion;
     GameEngineType GameEngine = GameEngineType::Other;
     ankerl::unordered_dense::map<void*, std::string> DeviceAdapterNames;
+    WindowsVersion WindowsVer = WindowsVersion::Unknown;
 
     bool NvngxDx11Inited = false;
     bool NvngxDx12Inited = false;
