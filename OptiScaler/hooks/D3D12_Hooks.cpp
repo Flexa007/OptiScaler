@@ -69,10 +69,16 @@ using PFN_SetDescriptorHeaps = rewrite_signature<decltype(&ID3D12GraphicsCommand
 using PFN_SetPipelineState = rewrite_signature<decltype(&ID3D12GraphicsCommandList::SetPipelineState)>::type;
 using PFN_SetComputeRootDescriptorTable =
     rewrite_signature<decltype(&ID3D12GraphicsCommandList::SetComputeRootDescriptorTable)>::type;
-using PFN_SetComputeRoot32BitConstants =
-    rewrite_signature<decltype(&ID3D12GraphicsCommandList::SetComputeRoot32BitConstants)>::type;
 using PFN_SetComputeRoot32BitConstant =
     rewrite_signature<decltype(&ID3D12GraphicsCommandList::SetComputeRoot32BitConstant)>::type;
+using PFN_SetComputeRoot32BitConstants =
+    rewrite_signature<decltype(&ID3D12GraphicsCommandList::SetComputeRoot32BitConstants)>::type;
+using PFN_SetComputeRootConstantBufferView =
+    rewrite_signature<decltype(&ID3D12GraphicsCommandList::SetComputeRootConstantBufferView)>::type;
+using PFN_SetComputeRootShaderResourceView =
+    rewrite_signature<decltype(&ID3D12GraphicsCommandList::SetComputeRootShaderResourceView)>::type;
+using PFN_SetComputeRootUnorderedAccessView =
+    rewrite_signature<decltype(&ID3D12GraphicsCommandList::SetComputeRootUnorderedAccessView)>::type;
 
 template <typename T> struct RootRestoreHook
 {
@@ -90,16 +96,22 @@ static RootRestoreHook<PFN_SetPipelineState> s_SetPipelineState {};
 // Those use a common computeRootStatesMutex mutex
 static std::shared_mutex computeRootStatesMutex;
 static RootRestoreHook<PFN_SetComputeRootDescriptorTable> s_SetComputeRootDescriptorTable {};
-static RootRestoreHook<PFN_SetComputeRoot32BitConstants> s_SetComputeRoot32BitConstants {};
 static RootRestoreHook<PFN_SetComputeRoot32BitConstant> s_SetComputeRoot32BitConstant {};
+static RootRestoreHook<PFN_SetComputeRoot32BitConstants> s_SetComputeRoot32BitConstants {};
+static RootRestoreHook<PFN_SetComputeRootConstantBufferView> s_SetComputeRootConstantBufferView {};
+static RootRestoreHook<PFN_SetComputeRootShaderResourceView> s_SetComputeRootShaderResourceView {};
+static RootRestoreHook<PFN_SetComputeRootUnorderedAccessView> s_SetComputeRootUnorderedAccessView {};
 
-static thread_local bool lateInProgressSetComputeRootSignature = false;
-static thread_local bool lateInProgressSetGraphicsRootSignature = false;
-static thread_local bool lateInProgressSetDescriptorHeaps = false;
-static thread_local bool lateInProgressSetPipelineState = false;
-static thread_local bool lateInProgressSetComputeRootDescriptorTable = false;
-static thread_local bool lateInProgressSetComputeRoot32BitConstants = false;
-static thread_local bool lateInProgressSetComputeRoot32BitConstant = false;
+static thread_local std::atomic_bool lateInProgressSetComputeRootSignature = false;
+static thread_local std::atomic_bool lateInProgressSetGraphicsRootSignature = false;
+static thread_local std::atomic_bool lateInProgressSetDescriptorHeaps = false;
+static thread_local std::atomic_bool lateInProgressSetPipelineState = false;
+static thread_local std::atomic_bool lateInProgressSetComputeRootDescriptorTable = false;
+static thread_local std::atomic_bool lateInProgressSetComputeRoot32BitConstants = false;
+static thread_local std::atomic_bool lateInProgressSetComputeRoot32BitConstant = false;
+static thread_local std::atomic_bool lateInProgressSetComputeRootConstantBufferView = false;
+static thread_local std::atomic_bool lateInProgressSetComputeRootShaderResourceView = false;
+static thread_local std::atomic_bool lateInProgressSetComputeRootUnorderedAccessView = false;
 
 struct DescriptorHeap
 {
@@ -112,7 +124,10 @@ enum class RootEntryType
     Invalid,
     Table,
     Constant,
-    Constants
+    Constants,
+    CBV,
+    SRV,
+    UAV,
 };
 
 struct RootState
@@ -122,7 +137,10 @@ struct RootState
     // Table
     D3D12_GPU_DESCRIPTOR_HANDLE rootDescriptorTable;
 
-    // Constants; Constant use Data[0] and DestOffset
+    // CBV / SRV / UAV
+    D3D12_GPU_VIRTUAL_ADDRESS bufferLocation;
+
+    // Constants; Constant uses Data[0] and DestOffset
     UINT Num32BitValues = 0;
     UINT DestOffset = 0;
     std::vector<uint32_t> Data;
@@ -439,6 +457,62 @@ static void hkSetComputeRoot32BitConstant(ID3D12GraphicsCommandList* commandList
     s_SetComputeRoot32BitConstant.o_earlyHook(commandList, RootParameterIndex, SrcData, DestOffsetIn32BitValues);
 }
 
+VALIDATE_HOOK(hkSetComputeRootConstantBufferView, PFN_SetComputeRootConstantBufferView)
+static void hkSetComputeRootConstantBufferView(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
+                                               D3D12_GPU_VIRTUAL_ADDRESS BufferLocation)
+{
+    if (!lateInProgressSetComputeRootConstantBufferView && !isUpscalerActive && commandList != nullptr)
+    {
+        std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
+        auto& table = computeRootStates[commandList];
+        if (RootParameterIndex < table.size())
+        {
+            table[RootParameterIndex].type = RootEntryType::CBV;
+            table[RootParameterIndex].bufferLocation = BufferLocation;
+        }
+    }
+
+    s_SetComputeRootConstantBufferView.o_earlyHook(commandList, RootParameterIndex, BufferLocation);
+}
+
+VALIDATE_HOOK(hkSetComputeRootShaderResourceView, PFN_SetComputeRootShaderResourceView)
+static void hkSetComputeRootShaderResourceView(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
+                                               D3D12_GPU_VIRTUAL_ADDRESS BufferLocation)
+{
+    if (!lateInProgressSetComputeRootShaderResourceView && !isUpscalerActive && commandList != nullptr)
+    {
+        std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
+        auto& table = computeRootStates[commandList];
+        if (RootParameterIndex < table.size())
+        {
+            table[RootParameterIndex].type = RootEntryType::SRV;
+            table[RootParameterIndex].bufferLocation = BufferLocation;
+        }
+    }
+
+    s_SetComputeRootShaderResourceView.o_earlyHook(commandList, RootParameterIndex, BufferLocation);
+
+    lateInProgressSetComputeRootShaderResourceView = false;
+}
+
+VALIDATE_HOOK(hkSetComputeRootUnorderedAccessView, PFN_SetComputeRootUnorderedAccessView)
+static void hkSetComputeRootUnorderedAccessView(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
+                                                D3D12_GPU_VIRTUAL_ADDRESS BufferLocation)
+{
+    if (lateInProgressSetComputeRootUnorderedAccessView && !isUpscalerActive && commandList != nullptr)
+    {
+        std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
+        auto& table = computeRootStates[commandList];
+        if (RootParameterIndex < table.size())
+        {
+            table[RootParameterIndex].type = RootEntryType::UAV;
+            table[RootParameterIndex].bufferLocation = BufferLocation;
+        }
+    }
+
+    s_SetComputeRootUnorderedAccessView.o_earlyHook(commandList, RootParameterIndex, BufferLocation);
+}
+
 // Late hooks, from upscaler eval
 VALIDATE_HOOK(hkSetPipelineStateLate, PFN_SetPipelineState)
 static void hkSetPipelineStateLate(ID3D12GraphicsCommandList* commandList, ID3D12PipelineState* pPipelineState)
@@ -591,6 +665,72 @@ static void hkSetComputeRoot32BitConstantLate(ID3D12GraphicsCommandList* command
     lateInProgressSetComputeRoot32BitConstant = false;
 }
 
+VALIDATE_HOOK(hkSetComputeRootConstantBufferViewLate, PFN_SetComputeRootConstantBufferView)
+static void hkSetComputeRootConstantBufferViewLate(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
+                                                   D3D12_GPU_VIRTUAL_ADDRESS BufferLocation)
+{
+    lateInProgressSetComputeRootConstantBufferView = true;
+
+    if (!isUpscalerActive && commandList != nullptr)
+    {
+        std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
+        auto& table = computeRootStates[commandList];
+        if (RootParameterIndex < table.size())
+        {
+            table[RootParameterIndex].type = RootEntryType::CBV;
+            table[RootParameterIndex].bufferLocation = BufferLocation;
+        }
+    }
+
+    s_SetComputeRootConstantBufferView.o_lateHook(commandList, RootParameterIndex, BufferLocation);
+
+    lateInProgressSetComputeRootConstantBufferView = false;
+}
+
+VALIDATE_HOOK(hkSetComputeRootShaderResourceViewLate, PFN_SetComputeRootShaderResourceView)
+static void hkSetComputeRootShaderResourceViewLate(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
+                                                   D3D12_GPU_VIRTUAL_ADDRESS BufferLocation)
+{
+    lateInProgressSetComputeRootShaderResourceView = true;
+
+    if (!isUpscalerActive && commandList != nullptr)
+    {
+        std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
+        auto& table = computeRootStates[commandList];
+        if (RootParameterIndex < table.size())
+        {
+            table[RootParameterIndex].type = RootEntryType::SRV;
+            table[RootParameterIndex].bufferLocation = BufferLocation;
+        }
+    }
+
+    s_SetComputeRootShaderResourceView.o_lateHook(commandList, RootParameterIndex, BufferLocation);
+
+    lateInProgressSetComputeRootShaderResourceView = false;
+}
+
+VALIDATE_HOOK(hkSetComputeRootUnorderedAccessViewLate, PFN_SetComputeRootUnorderedAccessView)
+static void hkSetComputeRootUnorderedAccessViewLate(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
+                                                    D3D12_GPU_VIRTUAL_ADDRESS BufferLocation)
+{
+    lateInProgressSetComputeRootUnorderedAccessView = true;
+
+    if (!isUpscalerActive && commandList != nullptr)
+    {
+        std::unique_lock<std::shared_mutex> lock(computeRootStatesMutex);
+        auto& table = computeRootStates[commandList];
+        if (RootParameterIndex < table.size())
+        {
+            table[RootParameterIndex].type = RootEntryType::UAV;
+            table[RootParameterIndex].bufferLocation = BufferLocation;
+        }
+    }
+
+    s_SetComputeRootUnorderedAccessView.o_lateHook(commandList, RootParameterIndex, BufferLocation);
+
+    lateInProgressSetComputeRootUnorderedAccessView = false;
+}
+
 void D3D12Hooks::HookToCommandListLate(ID3D12GraphicsCommandList* commandList)
 {
     if (s_SetComputeRootSignature.o_lateHook || s_SetGraphicsRootSignature.o_lateHook)
@@ -608,10 +748,15 @@ void D3D12Hooks::HookToCommandListLate(ID3D12GraphicsCommandList* commandList)
     s_SetComputeRootDescriptorTable.o_lateHook = (PFN_SetComputeRootDescriptorTable) pVTable[31];
     s_SetComputeRoot32BitConstant.o_lateHook = (PFN_SetComputeRoot32BitConstant) pVTable[33];
     s_SetComputeRoot32BitConstants.o_lateHook = (PFN_SetComputeRoot32BitConstants) pVTable[35];
+    s_SetComputeRootConstantBufferView.o_lateHook = (PFN_SetComputeRootConstantBufferView) pVTable[37];
+    s_SetComputeRootShaderResourceView.o_lateHook = (PFN_SetComputeRootShaderResourceView) pVTable[39];
+    s_SetComputeRootUnorderedAccessView.o_lateHook = (PFN_SetComputeRootUnorderedAccessView) pVTable[41];
 
     if (s_SetPipelineState.o_lateHook || s_SetDescriptorHeaps.o_lateHook || s_SetComputeRootSignature.o_lateHook ||
         s_SetGraphicsRootSignature.o_lateHook || s_SetComputeRootDescriptorTable.o_lateHook ||
-        s_SetComputeRoot32BitConstant.o_lateHook || s_SetComputeRoot32BitConstants.o_lateHook)
+        s_SetComputeRoot32BitConstant.o_lateHook || s_SetComputeRoot32BitConstants.o_lateHook ||
+        s_SetComputeRootConstantBufferView.o_lateHook || s_SetComputeRootShaderResourceView.o_lateHook ||
+        s_SetComputeRootUnorderedAccessView.o_lateHook)
     {
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());
@@ -637,6 +782,24 @@ void D3D12Hooks::HookToCommandListLate(ID3D12GraphicsCommandList* commandList)
         if (s_SetComputeRoot32BitConstants.o_lateHook != nullptr && extendedRestoreSignature)
             DetourAttach(&(PVOID&) s_SetComputeRoot32BitConstants.o_lateHook, hkSetComputeRoot32BitConstantsLate);
 
+        if (s_SetComputeRootConstantBufferView.o_lateHook != nullptr && extendedRestoreSignature)
+        {
+            DetourAttach(&(PVOID&) s_SetComputeRootConstantBufferView.o_lateHook,
+                         hkSetComputeRootConstantBufferViewLate);
+        }
+
+        if (s_SetComputeRootShaderResourceView.o_lateHook != nullptr && extendedRestoreSignature)
+        {
+            DetourAttach(&(PVOID&) s_SetComputeRootShaderResourceView.o_lateHook,
+                         hkSetComputeRootShaderResourceViewLate);
+        }
+
+        if (s_SetComputeRootUnorderedAccessView.o_lateHook != nullptr && extendedRestoreSignature)
+        {
+            DetourAttach(&(PVOID&) s_SetComputeRootUnorderedAccessView.o_lateHook,
+                         hkSetComputeRootUnorderedAccessViewLate);
+        }
+
         if (DetourTransactionCommit() == NO_ERROR)
         {
             LOG_DEBUG("Hooked RootSignature functions Late");
@@ -650,6 +813,9 @@ void D3D12Hooks::HookToCommandListLate(ID3D12GraphicsCommandList* commandList)
             s_SetComputeRootDescriptorTable.o_lateHook = nullptr;
             s_SetComputeRoot32BitConstant.o_lateHook = nullptr;
             s_SetComputeRoot32BitConstants.o_lateHook = nullptr;
+            s_SetComputeRootConstantBufferView.o_lateHook = nullptr;
+            s_SetComputeRootShaderResourceView.o_lateHook = nullptr;
+            s_SetComputeRootUnorderedAccessView.o_lateHook = nullptr;
 
             LOG_WARN("Hooking RootSignature Late failed");
         }
@@ -685,11 +851,15 @@ static void HookToCommandList(ID3D12Device* InDevice)
             s_SetComputeRootDescriptorTable.o_earlyHook = (PFN_SetComputeRootDescriptorTable) pVTable[31];
             s_SetComputeRoot32BitConstant.o_earlyHook = (PFN_SetComputeRoot32BitConstant) pVTable[33];
             s_SetComputeRoot32BitConstants.o_earlyHook = (PFN_SetComputeRoot32BitConstants) pVTable[35];
+            s_SetComputeRootConstantBufferView.o_earlyHook = (PFN_SetComputeRootConstantBufferView) pVTable[37];
+            s_SetComputeRootShaderResourceView.o_earlyHook = (PFN_SetComputeRootShaderResourceView) pVTable[39];
+            s_SetComputeRootUnorderedAccessView.o_earlyHook = (PFN_SetComputeRootUnorderedAccessView) pVTable[41];
 
             if (s_SetPipelineState.o_earlyHook || s_SetDescriptorHeaps.o_earlyHook ||
                 s_SetComputeRootSignature.o_earlyHook || s_SetGraphicsRootSignature.o_earlyHook ||
                 s_SetComputeRootDescriptorTable.o_earlyHook || s_SetComputeRoot32BitConstant.o_earlyHook ||
-                s_SetComputeRoot32BitConstants.o_earlyHook)
+                s_SetComputeRoot32BitConstants.o_earlyHook || s_SetComputeRootConstantBufferView.o_earlyHook ||
+                s_SetComputeRootShaderResourceView.o_earlyHook || s_SetComputeRootUnorderedAccessView.o_earlyHook)
             {
                 DetourTransactionBegin();
                 DetourUpdateThread(GetCurrentThread());
@@ -716,6 +886,24 @@ static void HookToCommandList(ID3D12Device* InDevice)
                 if (s_SetComputeRoot32BitConstants.o_earlyHook != nullptr && extendedRestoreSignature)
                     DetourAttach(&(PVOID&) s_SetComputeRoot32BitConstants.o_earlyHook, hkSetComputeRoot32BitConstants);
 
+                if (s_SetComputeRootConstantBufferView.o_earlyHook != nullptr && extendedRestoreSignature)
+                {
+                    DetourAttach(&(PVOID&) s_SetComputeRootConstantBufferView.o_earlyHook,
+                                 hkSetComputeRootConstantBufferView);
+                }
+
+                if (s_SetComputeRootShaderResourceView.o_earlyHook != nullptr && extendedRestoreSignature)
+                {
+                    DetourAttach(&(PVOID&) s_SetComputeRootShaderResourceView.o_earlyHook,
+                                 hkSetComputeRootShaderResourceView);
+                }
+
+                if (s_SetComputeRootUnorderedAccessView.o_earlyHook != nullptr && extendedRestoreSignature)
+                {
+                    DetourAttach(&(PVOID&) s_SetComputeRootUnorderedAccessView.o_earlyHook,
+                                 hkSetComputeRootUnorderedAccessView);
+                }
+
                 if (DetourTransactionCommit() == NO_ERROR)
                 {
                     LOG_DEBUG("Hooked RootSignature functions");
@@ -729,6 +917,9 @@ static void HookToCommandList(ID3D12Device* InDevice)
                     s_SetComputeRootDescriptorTable.o_earlyHook = nullptr;
                     s_SetComputeRoot32BitConstant.o_earlyHook = nullptr;
                     s_SetComputeRoot32BitConstants.o_earlyHook = nullptr;
+                    s_SetComputeRootConstantBufferView.o_earlyHook = nullptr;
+                    s_SetComputeRootShaderResourceView.o_earlyHook = nullptr;
+                    s_SetComputeRootUnorderedAccessView.o_earlyHook = nullptr;
 
                     LOG_WARN("Hooking RootSignature failed");
                 }
@@ -1860,6 +2051,33 @@ bool D3D12Hooks::RestoreComputeRootState(ID3D12GraphicsCommandList* cmdList)
                 {
                     LOG_ERROR("Couldn't restore ComputeRoot32BitConstants, no original SetComputeRoot32BitConstants");
                 }
+            }
+            else if (table[i].type == RootEntryType::CBV)
+            {
+                if (s_SetComputeRootConstantBufferView.o_lateHook)
+                    s_SetComputeRootConstantBufferView.o_lateHook(cmdList, i, table[i].bufferLocation);
+                else if (s_SetComputeRootConstantBufferView.o_earlyHook)
+                    s_SetComputeRootConstantBufferView.o_earlyHook(cmdList, i, table[i].bufferLocation);
+                else
+                    LOG_ERROR("Couldn't restore ComputeRoot CBV, no original SetComputeRootConstantBufferView");
+            }
+            else if (table[i].type == RootEntryType::SRV)
+            {
+                if (s_SetComputeRootShaderResourceView.o_lateHook)
+                    s_SetComputeRootShaderResourceView.o_lateHook(cmdList, i, table[i].bufferLocation);
+                else if (s_SetComputeRootShaderResourceView.o_earlyHook)
+                    s_SetComputeRootShaderResourceView.o_earlyHook(cmdList, i, table[i].bufferLocation);
+                else
+                    LOG_ERROR("Couldn't restore ComputeRoot SRV, no original SetComputeRootShaderResourceView");
+            }
+            else if (table[i].type == RootEntryType::UAV)
+            {
+                if (s_SetComputeRootUnorderedAccessView.o_lateHook)
+                    s_SetComputeRootUnorderedAccessView.o_lateHook(cmdList, i, table[i].bufferLocation);
+                else if (s_SetComputeRootUnorderedAccessView.o_earlyHook)
+                    s_SetComputeRootUnorderedAccessView.o_earlyHook(cmdList, i, table[i].bufferLocation);
+                else
+                    LOG_ERROR("Couldn't restore ComputeRoot UAV, no original SetComputeRootUnorderedAccessView");
             }
             else if (table[i].type == RootEntryType::Invalid)
             {
