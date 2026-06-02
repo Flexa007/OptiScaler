@@ -2128,32 +2128,38 @@ void D3D12Hooks::RestoreComputeRoot(ID3D12GraphicsCommandList* cmdList)
 
 void D3D12Hooks::RestoreGraphicsRootSignature(ID3D12GraphicsCommandList* cmdList)
 {
-    if (Config::Instance()->RestoreGraphicSignature.value_or_default() && graphicSignatures.contains(cmdList))
+    if (Config::Instance()->RestoreGraphicSignature.value_or_default())
     {
-        const bool extendedRestoreSignature = Config::Instance()->ExtendedStateRestore.value_or_default();
-
-        if (extendedRestoreSignature)
-            RestoreDescriptorHeaps(cmdList);
-
-        auto signature = graphicSignatures[cmdList];
-        LOG_TRACE("Restore GraphicsRootSig: {:X}, for CmdList: {:X}", (UINT64) signature, (UINT64) cmdList);
-
-        if (auto hook = s_SetGraphicsRootSignature.GetHook())
-            hook(cmdList, signature);
-        else
-            LOG_ERROR("Couldn't restore GraphicsRootSignature, no original SetGraphicsRootSignature");
-
-        if (extendedRestoreSignature)
+        // Restoring root signature is the most important and a key element
+        // Don't restore anything if we can't restore that
+        std::unique_lock<std::shared_mutex> lock(s_SetGraphicsRootSignature.mutex);
+        if (graphicSignatures.contains(cmdList))
         {
-            if (RestorePipelineState(cmdList))
-                LOG_TRACE("Restored PipelineState for CmdList: {:X}", (UINT64) cmdList);
+            const bool extendedRestoreSignature = Config::Instance()->ExtendedStateRestore.value_or_default();
+
+            if (extendedRestoreSignature)
+                RestoreDescriptorHeaps(cmdList);
+
+            auto signature = graphicSignatures[cmdList];
+            LOG_TRACE("Restore GraphicsRootSig: {:X}, for CmdList: {:X}", (UINT64) signature, (UINT64) cmdList);
+
+            if (auto hook = s_SetGraphicsRootSignature.GetHook())
+                hook(cmdList, signature);
             else
-                LOG_TRACE("Can't restore PipelineState for CmdList: {:X}", (UINT64) cmdList);
+                LOG_ERROR("Couldn't restore GraphicsRootSignature, no original SetGraphicsRootSignature");
+
+            if (extendedRestoreSignature)
+            {
+                if (RestorePipelineState(cmdList))
+                    LOG_TRACE("Restored PipelineState for CmdList: {:X}", (UINT64) cmdList);
+                else
+                    LOG_TRACE("Can't restore PipelineState for CmdList: {:X}", (UINT64) cmdList);
+            }
         }
-    }
-    else if (Config::Instance()->RestoreGraphicSignature.value_or_default())
-    {
-        LOG_TRACE("Can't restore GraphicsRootSig for CmdList: {:X}", (UINT64) cmdList);
+        else
+        {
+            LOG_TRACE("Can't restore GraphicsRootSig for CmdList: {:X}", (UINT64) cmdList);
+        }
     }
 }
 
