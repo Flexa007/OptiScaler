@@ -104,16 +104,16 @@ static RootRestoreHook<PFN_SetComputeRootConstantBufferView> s_SetComputeRootCon
 static RootRestoreHook<PFN_SetComputeRootShaderResourceView> s_SetComputeRootShaderResourceView {};
 static RootRestoreHook<PFN_SetComputeRootUnorderedAccessView> s_SetComputeRootUnorderedAccessView {};
 
-static thread_local std::atomic_bool lateInProgressSetComputeRootSignature = false;
-static thread_local std::atomic_bool lateInProgressSetGraphicsRootSignature = false;
-static thread_local std::atomic_bool lateInProgressSetDescriptorHeaps = false;
-static thread_local std::atomic_bool lateInProgressSetPipelineState = false;
-static thread_local std::atomic_bool lateInProgressSetComputeRootDescriptorTable = false;
-static thread_local std::atomic_bool lateInProgressSetComputeRoot32BitConstants = false;
-static thread_local std::atomic_bool lateInProgressSetComputeRoot32BitConstant = false;
-static thread_local std::atomic_bool lateInProgressSetComputeRootConstantBufferView = false;
-static thread_local std::atomic_bool lateInProgressSetComputeRootShaderResourceView = false;
-static thread_local std::atomic_bool lateInProgressSetComputeRootUnorderedAccessView = false;
+static thread_local bool lateInProgressSetComputeRootSignature = false;
+static thread_local bool lateInProgressSetGraphicsRootSignature = false;
+static thread_local bool lateInProgressSetDescriptorHeaps = false;
+static thread_local bool lateInProgressSetPipelineState = false;
+static thread_local bool lateInProgressSetComputeRootDescriptorTable = false;
+static thread_local bool lateInProgressSetComputeRoot32BitConstants = false;
+static thread_local bool lateInProgressSetComputeRoot32BitConstant = false;
+static thread_local bool lateInProgressSetComputeRootConstantBufferView = false;
+static thread_local bool lateInProgressSetComputeRootShaderResourceView = false;
+static thread_local bool lateInProgressSetComputeRootUnorderedAccessView = false;
 
 struct DescriptorHeap
 {
