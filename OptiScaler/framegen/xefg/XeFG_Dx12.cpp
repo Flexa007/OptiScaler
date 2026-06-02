@@ -107,7 +107,7 @@ const char* XeFG_Dx12::Name()
 {
     static std::string nameBuffer;
 
-    if (State::Instance().xefgMaxInterpolationCount == 1)
+    if (State::Instance().xefgMaxInterpolationCount == 1 || _framesToInterpolate < 0)
     {
         nameBuffer = "XeFG";
     }
@@ -354,10 +354,7 @@ bool XeFG_Dx12::CreateSwapchain(IDXGIFactory* factory, ID3D12CommandQueue* cmdQu
     }
 
     if (_framesToInterpolate > intTarget)
-        _framesToInterpolate = intTarget;
-
-    // if (!Config::Instance()->FGXeFGInterpolationCount.has_value())
-    //     Config::Instance()->FGXeFGInterpolationCount.set_volatile_value(intTarget);
+        Config::Instance()->FGXeFGInterpolationCount.set_volatile_value(intTarget);
 
     params.maxInterpolatedFrames = intTarget;
 
@@ -516,10 +513,7 @@ bool XeFG_Dx12::CreateSwapchain1(IDXGIFactory* factory, ID3D12CommandQueue* cmdQ
     }
 
     if (_framesToInterpolate > intTarget)
-        _framesToInterpolate = intTarget;
-
-    // if (!Config::Instance()->FGXeFGInterpolationCount.has_value())
-    //     Config::Instance()->FGXeFGInterpolationCount.set_volatile_value(intTarget);
+        Config::Instance()->FGXeFGInterpolationCount.set_volatile_value(intTarget);
 
     params.maxInterpolatedFrames = intTarget;
 
