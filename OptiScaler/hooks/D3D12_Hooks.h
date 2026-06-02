@@ -11,7 +11,7 @@ class D3D12Hooks
     static bool RestoreDescriptorHeaps(ID3D12GraphicsCommandList* cmdList);
     static bool RestorePipelineState(ID3D12GraphicsCommandList* cmdList);
     static bool RestoreComputeRootState(ID3D12GraphicsCommandList* cmdList);
-    static void RestoreComputeRootSignature(ID3D12GraphicsCommandList* cmdList);
+    static bool RestoreGraphicsRootState(ID3D12GraphicsCommandList* cmdList);
 
   public:
     static void Hook();
@@ -19,9 +19,7 @@ class D3D12Hooks
     static void HookDevice(ID3D12Device* device);
     static void Unhook();
     static void SetRootSignatureTracking(bool enable);
-    static bool CanRestoreComputeRootSignature(ID3D12GraphicsCommandList* cmdList);
-    static bool CanRestoreGraphicsRootSignature(ID3D12GraphicsCommandList* cmdList);
+    static bool CanRestoreRootSignature(ID3D12GraphicsCommandList* cmdList);
     static void HookToCommandListLate(ID3D12GraphicsCommandList* commandList);
-    static void RestoreComputeRoot(ID3D12GraphicsCommandList* cmdList);
-    static void RestoreGraphicsRootSignature(ID3D12GraphicsCommandList* cmdList);
+    static void RestoreRoot(ID3D12GraphicsCommandList* cmdList);
 };

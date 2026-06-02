@@ -691,12 +691,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
         State::Instance().changeBackend[handleId] = true;
     }
 
-    if (Config::Instance()->RestoreComputeSignature.value_or_default())
-        D3D12Hooks::RestoreComputeRoot(InCmdList);
-
-    if (Config::Instance()->RestoreGraphicSignature.value_or_default())
-        D3D12Hooks::RestoreGraphicsRootSignature(InCmdList);
-
+    // Root signature restore
+    D3D12Hooks::RestoreRoot(InCmdList);
     D3D12Hooks::SetRootSignatureTracking(true);
 
     State::Instance().FGchanged = true;
@@ -882,17 +878,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     if (Config::Instance()->SkipFirstFrames.has_value() && evalCounter < Config::Instance()->SkipFirstFrames.value())
         return NVSDK_NGX_Result_Success;
 
-    if (Config::Instance()->RestoreComputeSignature.value_or_default() &&
-        !D3D12Hooks::CanRestoreComputeRootSignature(InCmdList))
+    if ((Config::Instance()->RestoreComputeSignature.value_or_default() ||
+         Config::Instance()->RestoreGraphicSignature.value_or_default()) &&
+        !D3D12Hooks::CanRestoreRootSignature(InCmdList))
     {
-        LOG_DEBUG("Skipping upscaling because can't restore compute signature");
-        return NVSDK_NGX_Result_Success;
-    }
-
-    if (Config::Instance()->RestoreGraphicSignature.value_or_default() &&
-        !D3D12Hooks::CanRestoreGraphicsRootSignature(InCmdList))
-    {
-        LOG_DEBUG("Skipping upscaling because can't restore graphics signature");
+        LOG_DEBUG("Skipping upscaling because can't restore root signature");
         return NVSDK_NGX_Result_Success;
     }
 
@@ -970,12 +960,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     NVSDK_NGX_Result methodResult = evalResult ? NVSDK_NGX_Result_Success : NVSDK_NGX_Result_Fail;
 
     // Root signature restore
-    if (Config::Instance()->RestoreComputeSignature.value_or_default())
-        D3D12Hooks::RestoreComputeRoot(InCmdList);
-
-    if (Config::Instance()->RestoreGraphicSignature.value_or_default())
-        D3D12Hooks::RestoreGraphicsRootSignature(InCmdList);
-
+    D3D12Hooks::RestoreRoot(InCmdList);
     D3D12Hooks::SetRootSignatureTracking(true);
 
     LOG_DEBUG("Upscaling done: {}", evalResult);
