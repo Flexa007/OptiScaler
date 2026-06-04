@@ -282,53 +282,61 @@ void LoadAsiPlugins()
                 std::thread(
                     []()
                     {
-                        auto delay = Config::Instance()->LateAsiPluginsDelay.value_or_default();
-                        LOG_INFO("Waiting {} seconds before loading late-load plugins...", delay);
-                        std::this_thread::sleep_for(std::chrono::seconds(delay));
-
-                        for (const auto& entry : _lateLoadingEntries)
+                        try
                         {
-                            HMODULE hMod = NtdllProxy::LoadLibraryExW_Ldr(entry.path().c_str(), NULL, 0);
 
-                            if (hMod != nullptr)
+                            auto delay = Config::Instance()->LateAsiPluginsDelay.value_or_default();
+                            LOG_INFO("Waiting {} seconds before loading late-load plugins...", delay);
+                            std::this_thread::sleep_for(std::chrono::seconds(delay));
+
+                            for (const auto& entry : _lateLoadingEntries)
                             {
-                                LOG_INFO(L"Loaded late: {}", entry.path().wstring());
-                                _asiHandles.push_back(hMod);
+                                HMODULE hMod = NtdllProxy::LoadLibraryExW_Ldr(entry.path().c_str(), NULL, 0);
 
-                                auto init =
-                                    (PFN_InitializeASI) KernelBaseProxy::GetProcAddress_()(hMod, "InitializeASI");
-
-                                auto patchResult =
-                                    (PFN_PatchResult) KernelBaseProxy::GetProcAddress_()(hMod, "PatchResult");
-
-                                if (init != nullptr)
-                                    init();
-
-                                if (patchResult != nullptr)
+                                if (hMod != nullptr)
                                 {
-                                    auto pr = patchResult();
-                                    if (pr)
+                                    LOG_INFO(L"Loaded late: {}", entry.path().wstring());
+                                    _asiHandles.push_back(hMod);
+
+                                    auto init =
+                                        (PFN_InitializeASI) KernelBaseProxy::GetProcAddress_()(hMod, "InitializeASI");
+
+                                    auto patchResult =
+                                        (PFN_PatchResult) KernelBaseProxy::GetProcAddress_()(hMod, "PatchResult");
+
+                                    if (init != nullptr)
+                                        init();
+
+                                    if (patchResult != nullptr)
                                     {
-                                        LOG_INFO("Game patching is successful");
-                                        State::Instance().isOptiPatcherSucceed = true;
-                                        LOG_INFO("Disabling spoofing");
+                                        auto pr = patchResult();
+                                        if (pr)
+                                        {
+                                            LOG_INFO("Game patching is successful");
+                                            State::Instance().isOptiPatcherSucceed = true;
+                                            LOG_INFO("Disabling spoofing");
 
-                                        if (!Config::Instance()->DxgiSpoofing.has_value())
-                                            Config::Instance()->DxgiSpoofing.set_volatile_value(false);
+                                            if (!Config::Instance()->DxgiSpoofing.has_value())
+                                                Config::Instance()->DxgiSpoofing.set_volatile_value(false);
 
-                                        if (!Config::Instance()->VulkanSpoofing.has_value())
-                                            Config::Instance()->VulkanSpoofing.set_volatile_value(false);
+                                            if (!Config::Instance()->VulkanSpoofing.has_value())
+                                                Config::Instance()->VulkanSpoofing.set_volatile_value(false);
 
-                                        if (!Config::Instance()->VulkanExtensionSpoofing.has_value())
-                                            Config::Instance()->VulkanExtensionSpoofing.set_volatile_value(false);
+                                            if (!Config::Instance()->VulkanExtensionSpoofing.has_value())
+                                                Config::Instance()->VulkanExtensionSpoofing.set_volatile_value(false);
+                                        }
                                     }
                                 }
+                                else
+                                {
+                                    DWORD err = GetLastError();
+                                    LOG_ERROR(L"Failed to load: {}, error {:X}", entry.path().wstring(), err);
+                                }
                             }
-                            else
-                            {
-                                DWORD err = GetLastError();
-                                LOG_ERROR(L"Failed to load: {}, error {:X}", entry.path().wstring(), err);
-                            }
+                        }
+                        catch (...)
+                        {
+                            LOG_ERROR("Exception occurred while loading late-load plugins");
                         }
                     })
                     .detach();
