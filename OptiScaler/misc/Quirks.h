@@ -41,6 +41,7 @@ enum class GameQuirk : uint64_t
     DoNotSkipResize,
     OldOverlayMenu,
     UseManualInputs,
+    DoNotLoadAmdxc64,
 
     // Quirks that are applied deeper in code
     CyberpunkHudlessState,
@@ -220,7 +221,7 @@ static const QuirkEntry quirkTable[] = {
     // SL spoof enough to unlock everything DLSS, uses bindless so restoring compute is complicated
     QUIRK_ENTRY("007firstlight.exe", GameQuirk::DisableDxgiSpoofing, GameQuirk::RestoreComputeSigOnNonNvidia,
                 GameQuirk::RestoreComputeSigOnNvidia, GameQuirk::ExtendedSigRestore,
-                GameQuirk::IgnoreValidUntilEvaluateForFG),
+                GameQuirk::IgnoreValidUntilEvaluateForFG, GameQuirk::DoNotLoadAmdxc64),
 
     // ELDEN RING (for ERSS mod) and ER NIGHTREIGN (for NRSS mod)
     // no spoof needed for DLSS inputs

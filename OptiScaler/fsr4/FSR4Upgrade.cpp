@@ -512,9 +512,8 @@ void InitFSR4Update()
     // For FSR4 Upgrade
     moduleAmdxc64 = KernelBaseProxy::GetModuleHandleW_()(L"amdxc64.dll");
 
-    // 007 First Light acts weird when it's loaded early
-    // if (moduleAmdxc64 == nullptr)
-    //     moduleAmdxc64 = NtdllProxy::LoadLibraryExW_Ldr(L"amdxc64.dll", NULL, 0);
+    if (moduleAmdxc64 == nullptr && !Config::Instance()->Fsr4DoNotLoadAmdxc64.value_or_default())
+        moduleAmdxc64 = NtdllProxy::LoadLibraryExW_Ldr(L"amdxc64.dll", NULL, 0);
 
     if (moduleAmdxc64 != nullptr)
     {

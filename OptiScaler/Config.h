@@ -402,10 +402,6 @@ class Config
     CustomOptional<int> FfxUpscalerIndex { 0 };
     CustomOptional<int> FfxFGIndex { 0 };
     CustomOptional<bool> FsrUseMaskForTransparency { true };
-    CustomOptional<bool> Fsr4Update { false };
-    CustomOptional<uint32_t, NoDefault> Fsr4Model;
-    CustomOptional<bool> Fsr4EnableDebugView { false };
-    CustomOptional<bool> Fsr4EnableWatermark { false };
     CustomOptional<bool> FsrNonLinearColorSpace { false };
     CustomOptional<bool> FsrNonLinearSRGB { false };
     CustomOptional<bool> FsrNonLinearPQ { false };
@@ -415,6 +411,13 @@ class Config
     CustomOptional<float> FsrShadingScale { 1.0f };
     CustomOptional<float> FsrAccAddPerFrame { 0.333f };
     CustomOptional<float> FsrMinDisOccAcc { -0.333f };
+
+    // FSR4
+    CustomOptional<bool> Fsr4Update { false };
+    CustomOptional<uint32_t, NoDefault> Fsr4Model;
+    CustomOptional<bool> Fsr4EnableDebugView { false };
+    CustomOptional<bool> Fsr4EnableWatermark { false };
+    CustomOptional<bool> Fsr4DoNotLoadAmdxc64 { false };
 
     // FSR Common
     CustomOptional<float> FsrVerticalFov { 60.0f };

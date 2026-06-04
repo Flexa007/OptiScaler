@@ -231,6 +231,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             Fsr4Update.set_from_config(readBool("FSR", "Fsr4Update"));
             Fsr4EnableDebugView.set_from_config(readBool("FSR", "Fsr4EnableDebugView"));
             Fsr4EnableWatermark.set_from_config(readBool("FSR", "Fsr4EnableWatermark"));
+            Fsr4DoNotLoadAmdxc64.set_from_config(readBool("FSR", "Fsr4DoNotLoadAmdxc64"));
 
             if (auto setting = readInt("FSR", "Fsr4Model"); setting.has_value() && setting >= 0 && setting <= 5)
                 Fsr4Model.set_from_config(setting);
@@ -974,6 +975,8 @@ bool Config::SaveIni()
                      GetBoolValue(Instance()->Fsr4EnableDebugView.value_for_config()).c_str());
         ini.SetValue("FSR", "Fsr4EnableWatermark",
                      GetBoolValue(Instance()->Fsr4EnableWatermark.value_for_config()).c_str());
+        ini.SetValue("FSR", "Fsr4DoNotLoadAmdxc64",
+                     GetBoolValue(Instance()->Fsr4DoNotLoadAmdxc64.value_for_config()).c_str());
         ini.SetValue("FSR", "FsrNonLinearColorSpace",
                      GetBoolValue(Instance()->FsrNonLinearColorSpace.value_for_config()).c_str());
         ini.SetValue("FSR", "FsrNonLinearPQ", GetBoolValue(Instance()->FsrNonLinearPQ.value_for_config()).c_str());
@@ -1201,7 +1204,8 @@ bool Config::SaveIni()
         ini.SetValue("Hotfix", "CheckForUpdate", GetBoolValue(Instance()->CheckForUpdate.value_for_config()).c_str());
         ini.SetValue("Hotfix", "SimulateWaitableObject",
                      GetBoolValue(Instance()->SimulateWaitableObject.value_for_config()).c_str());
-        ini.SetValue("Hotfix", "DisableOverlays", GetBoolValue(Instance()->DisableOverlays.value_for_config()).c_str());
+        ini.SetValue("Hotfix", "DisableOverlays",
+                     GetBoolValue(Instance()->DisableOverlays.value_for_config(true)).c_str());
         ini.SetValue("Hotfix", "ManualInputPolling",
                      GetBoolValue(Instance()->ManualInputPolling.value_for_config()).c_str());
 
